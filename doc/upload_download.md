@@ -1,56 +1,56 @@
-### 文件传输功能设计与实现总结
+### Conception et mise en œuvre du transfert de fichiers — synthèse
 
-本次工作为 **Nanobot 平台新增完整的文件上传与下载能力**，支持：
+Ce chantier a ajouté au **platform Nanobot une capacité complète d'upload/download de fichiers**, avec :
 
-* 用户在聊天中上传文件（≤50MB）
-* Agent 分析文件内容
-* Agent 生成新文件并作为聊天附件返回
-* 文件管理页面统一查看与删除
+* téléversement de fichiers par l'utilisateur dans le chat (≤ 50 Mo)
+* analyse du contenu des fichiers par l'agent
+* génération de nouveaux fichiers par l'agent, renvoyés en pièces jointes
+* page de gestion des fichiers pour consultation et suppression centralisées
 
 ---
 
-## 一、整体架构方案
+## 1. Architecture générale
 
-采用 **：独立文件 API + 消息引用**
+Approche retenue : **API fichiers dédiée + références dans les messages**
 
-架构流程：
+Flux :
 
 ```
 Frontend (3080)
     ↓
 Gateway (8080)
     ↓
-Per-user Container (18080)
+Conteneur utilisateur (18080)
 ```
 
-核心思想：
+Idée clé :
 
-* 文件通过独立 HTTP API 上传/下载
-* 聊天消息中通过 `attachments` 字段引用 `file_id`
-* 文件存储在每个用户容器的 workspace volume 中
-* Gateway 仅做透明代理，无需改动
+* les fichiers transitent par une API HTTP indépendante (upload/download)
+* les messages de chat référencent un `file_id` via le champ `attachments`
+* les fichiers sont stockés dans le volume workspace de chaque conteneur utilisateur
+* le Gateway reste un proxy transparent — aucune modification nécessaire
 
-优点：
+Avantages :
 
-* 上传与聊天解耦
-* 文件可复用
-* 不阻塞 WebSocket
-* 不增加 Gateway 复杂度
-* 天然用户隔离（每容器独立 volume）
+* upload découplé du chat
+* fichiers réutilisables
+* ne bloque pas le WebSocket
+* n'augmente pas la complexité du Gateway
+* isolation naturelle des utilisateurs (un volume par conteneur)
 
 ---
 
-## 二、文件存储设计
+## 2. Stockage des fichiers
 
-目录结构：
+Structure :
 
 ```
 /workspace/files/<file_id>/
     metadata.json
-    <original_file>
+    <fichier_original>
 ```
 
-metadata 示例：
+Exemple de metadata :
 
 ```json
 {
@@ -63,37 +63,37 @@ metadata 示例：
 }
 ```
 
-特性：
+Caractéristiques :
 
-* UUID4 前 12 位作为 file_id
-* 文件跟随 volume 生命周期
-* 后续可扩展清理策略
+* `file_id` = 12 premiers caractères d'un UUID4
+* cycle de vie des fichiers lié au volume
+- stratégie de nettoyage extensible ultérieurement
 
 ---
 
-## 三、后端实现
+## 3. Implémentation backend
 
-### 1️⃣ 文件 API（新增）
+### 1️⃣ API fichiers (nouveau)
 
-在 `server.py` 中新增：
+Ajouts dans `server.py` :
 
 * `POST /api/files/upload`
 * `GET /api/files/{file_id}`
 * `GET /api/files`
 * `DELETE /api/files/{file_id}`
 
-支持：
+Prise en charge :
 
-* multipart 上传
-* 二进制透传
-* image inline 展示
-* 文件下载 attachment
+* upload multipart
+* transfert binaire transparent
+* affichage inline des images
+* download en pièce jointe
 
 ---
 
-### 2️⃣ WebSocket 与 HTTP Chat 支持 attachments
+### 2️⃣ Support des attachments en WebSocket et chat HTTP
 
-消息结构新增：
+Nouvelle structure de message :
 
 ```json
 {
@@ -104,208 +104,208 @@ metadata 示例：
       "file_id": "...",
       "name": "...",
       "content_type": "...",
-      "size": ...
+      "size": 0
     }
   ]
 }
 ```
 
-支持：
+Prise en charge :
 
-* 用户上传文件随消息发送
-* Agent 输出文件作为附件返回
-* Session 历史包含 attachments 字段
+* envoi de fichiers utilisateurs avec les messages
+* retour des fichiers générés par l'agent comme pièces jointes
+* champ attachments présent dans l'historique des sessions
 
 ---
 
-### 3️⃣ Agent 文件处理机制
+### 3️⃣ Traitement des fichiers par l'agent
 
-输入：
+Entrées :
 
-* 图片 → Vision 模型处理
-* 文本类文件 → 提取文本注入 Prompt
-* 其他格式 → 存储但不解析
+* images → traitement par modèle Vision
+* fichiers texte → extraction puis injection dans le Prompt
+* autres formats → stockage sans analyse
 
-输出：
+Sorties :
 
-新增工具函数：
+nouvelle fonction utilitaire :
 
 ```
 save_output_file()
 ```
 
-用于：
+Responsable de :
 
-* 生成 file_id
-* 移动文件到 files 目录
-* 写 metadata
-* 在回复中引用附件
-
----
-
-### 4️⃣ 安全增强
-
-修复并加固：
-
-* Path traversal 防护
-* 文件名与 file_id 校验
-* 输入合法性检查
-* 认证图片加载（避免未授权访问）
+* générer un file_id
+* déplacer le fichier vers le répertoire files
+* écrire les metadata
+* référencer la pièce jointe dans la réponse
 
 ---
 
-## 四、前端实现
+### 4️⃣ Renforcement sécurité
 
-### 1️⃣ 聊天输入区增强
+Corrections et durcissements :
 
-新增：
-
-* 📎 附件按钮
-* 上传进度条
-* 待发送附件列表
-* 发送时附带 file_id
+* protection contre le path traversal
+* validation des noms de fichiers et des file_id
+* contrôle de validité des entrées
+* chargement des images authentifié (anti accès non autorisé)
 
 ---
 
-### 2️⃣ 消息气泡附件渲染
+## 4. Implémentation front-end
 
-* 图片 → 直接 inline 展示
-* 其他文件 → 文件卡片 + 下载按钮
+### 1️⃣ Zone de saisie enrichie
 
----
+Ajouts :
 
-### 3️⃣ Files 管理页面
-
-新增页面：
-
-* 列表展示所有文件
-* 支持 session 筛选
-* 下载
-* 删除
-
-导航栏新增「文件」页签。
+* bouton 📎 pièces jointes
+* barre de progression d'upload
+* liste des pièces jointes en attente
+* envoi des file_id avec le message
 
 ---
 
-## 五、完整实施过程
+### 2️⃣ Rendu des pièces jointes dans les bulles
 
-共完成：
+* image → affichage inline direct
+* autre fichier → carte fichier + bouton télécharger
 
-* 设计文档 1 份
-* 实施计划 1 份
-* 10 个任务
+---
+
+### 3️⃣ Page de gestion des fichiers
+
+Nouvelle page :
+
+* liste de tous les fichiers
+* filtrage par session
+* téléchargement
+* suppression
+
+Onglet « Fichiers » ajouté à la navigation.
+
+---
+
+## 5. Déroulé complet
+
+Réalisations :
+
+* 1 document de conception
+* 1 plan de mise en œuvre
+* 10 tâches
 * 9+ commits
-* 多轮 Spec Review + Code Review
-* 修复 1 个 critical + 2 个重要问题
+* plusieurs revues Spec + Code Review
+* correction de 1 problème critique et 2 importants
 
-修改文件范围：
+Périmètre modifié :
 
-Backend：
+Backend :
 
 * files.py
 * server.py
 * web.py
 
-Frontend：
+Frontend :
 
 * types
 * api.ts
-* chat page
-* files page
+* page chat
+* page fichiers
 * header
 
 ---
 
-## 六、最终能力
+## 6. Capacités finales
 
-系统现在支持：
+Le système prend désormais en charge :
 
-✅ 聊天上传文件
-✅ Agent 读取并分析
-✅ Agent 生成文件并返回
-✅ 图片直接内嵌展示
-✅ 文件管理页面
-✅ 安全路径保护
-✅ WebSocket + HTTP 双通道支持
-
----
-
-## 七、架构成熟度评价
-
-当前实现：
-
-* 架构清晰
-* 与现有系统高度解耦
-* 安全性可控
-* 易于扩展（后续可接 S3、对象存储）
-* 不破坏 Gateway 的纯代理角色
-
-
-
-下面是本次 **文件传输功能** 涉及的所有文件修改与新增文件清单，按 Backend / Frontend 分类说明。
+✅ upload de fichiers depuis le chat
+✅ lecture et analyse par l'agent
+✅ génération de fichiers par l'agent et restitution
+✅ affichage inline des images
+✅ page de gestion des fichiers
+✅ protection sécurisée des chemins
+✅ support double canal WebSocket + HTTP
 
 ---
 
-# 一、Backend 变更
+## 7. Évaluation de la maturité architecturale
 
-## ✅ 1️⃣ 新增文件
+Implémentation actuelle :
+
+* architecture claire
+* très faiblement couplée au système existant
+* sécurité maîtrisée
+* facilement extensible (branchement futur S3 / stockage objet possible)
+* préserve le rôle de pur proxy du Gateway
+
+---
+
+Ci-dessous, la liste exhaustive des fichiers créés ou modifiés par cette fonctionnalité de **transfert de fichiers**, classés Backend / Frontend.
+
+---
+
+# 1. Changements backend
+
+## ✅ 1️⃣ Nouveaux fichiers
 
 ### `nanobot/web/files.py`
 
-**作用：文件存储核心模块**
+**Rôle : module central de stockage des fichiers**
 
-包含：
+Contient :
 
-* 文件保存逻辑
-* metadata.json 写入
-* 文件列表读取
-* 删除文件
-* 路径安全校验（防 path traversal）
-* file_id 校验
+* logique de sauvegarde des fichiers
+* écriture de metadata.json
+* lecture de la liste des fichiers
+* suppression de fichiers
+* validation sécurisée des chemins (anti path traversal)
+* validation des file_id
 
-这是整个文件系统的底层支撑模块。
+C'est le module de fondation de tout le système de fichiers.
 
 ---
 
-## ✅ 2️⃣ 修改文件
+## ✅ 2️⃣ Fichiers modifiés
 
 ### `nanobot/web/server.py`
 
-**改动最大文件**
+**Fichier le plus remanié**
 
-新增：
+Ajouts :
 
 * `POST /api/files/upload`
 * `GET /api/files/{file_id}`
 * `GET /api/files`
 * `DELETE /api/files/{file_id}`
 
-增强：
+Renforcements :
 
-* WebSocket 消息支持 `attachments`
-* HTTP Chat 接口支持 `attachments`
-* Session history 返回 attachments
-* 文件类型判断 inline / attachment
-* 文件大小校验（≤50MB）
+* les messages WebSocket supportent `attachments`
+* l'interface chat HTTP supporte `attachments`
+* l'historique de session renvoie les attachments
+* décision inline / attachment selon le type de fichier
+* validation de taille (≤ 50 Mo)
 
 ---
 
 ### `nanobot/channels/web.py`
 
-**新增功能：**
+**Nouvelles fonctions :**
 
-* Outbound WebSocket 消息支持 `attachments`
-* Agent 输出文件时自动附加到响应结构
+* les messages WebSocket sortants supportent `attachments`
+* les fichiers produits par l'agent sont automatiquement joints à la réponse
 
 ---
 
-# 二、Frontend 变更
+# 2. Changements frontend
 
-## ✅ 1️⃣ 修改文件
+## ✅ 1️⃣ Fichiers modifiés
 
 ### `frontend/types/index.ts`
 
-新增：
+Ajout :
 
 ```ts
 export interface FileAttachment {
@@ -316,88 +316,88 @@ export interface FileAttachment {
 }
 ```
 
-更新：
+Mise à jour :
 
-* `ChatMessage` 增加 `attachments?: FileAttachment[]`
+* `ChatMessage` gagne `attachments?: FileAttachment[]`
 
 ---
 
 ### `frontend/lib/api.ts`
 
-新增：
+Ajouts :
 
-* `uploadFile()`（支持进度回调）
+* `uploadFile()` (avec callback de progression)
 * `listFiles()`
 * `deleteFile()`
 * `getFileUrl()`
-* `sendRaw()`（支持 attachments）
+* `sendRaw()` (support attachments)
 
-增强：
+Renforcements :
 
-* `sendMessage()` 支持 attachments
-* WebSocket handler 支持附件字段
+* `sendMessage()` accepte les attachments
+* le handler WebSocket traite le champ pièces jointes
 
 ---
 
 ### `frontend/app/page.tsx`
 
-新增：
+Ajouts :
 
-* 📎 附件按钮
-* 上传进度条 UI
-* 待发送附件列表
-* 消息气泡附件渲染
-* 图片 inline 展示组件
-* 文件卡片组件
+* bouton 📎 pièces jointes
+* UI de progression d'upload
+* liste des pièces jointes en attente
+* rendu des pièces jointes dans les bulles
+* composant d'affichage inline des images
+* composant carte fichier
 
-这是聊天页面核心改造。
+C'est la refonte cœur de la page de chat.
 
 ---
 
 ### `frontend/app/files/page.tsx`
 
-**新增文件管理页面**
+**Nouvelle page de gestion des fichiers**
 
-功能：
+Fonctions :
 
-* 列出文件
-* 下载
-* 删除
-* 按 session 筛选
+* lister les fichiers
+* télécharger
+* supprimer
+* filtrer par session
 
 ---
 
 ### `frontend/components/Header.tsx`
 
-新增：
+Ajout :
 
-* “文件”导航页签
-
----
-
-# 三、提交记录概览
-
-从基础版本开始，共新增：
-
-* 1 个 backend 文件
-* 1 个 frontend 页面
-* 多个核心文件修改
-* 10+ commits
-* 修复若干安全问题
+* onglet de navigation « Fichiers »
 
 ---
 
-# 四、文件修改总览表
+# 3. Historique des commits
 
-| 类型       | 文件                             | 变更类型 | 说明                        |
-| -------- | ------------------------------ | ---- | ------------------------- |
-| Backend  | nanobot/web/files.py           | 新增   | 文件存储核心模块                  |
-| Backend  | nanobot/web/server.py          | 修改   | 文件 API + chat attachments |
-| Backend  | nanobot/channels/web.py        | 修改   | WebSocket 支持附件            |
-| Frontend | frontend/types/index.ts        | 修改   | 定义 FileAttachment         |
-| Frontend | frontend/lib/api.ts            | 修改   | 上传/下载 API                 |
-| Frontend | frontend/app/page.tsx          | 修改   | 聊天附件 UI                   |
-| Frontend | frontend/app/files/page.tsx    | 新增   | 文件管理页面                    |
-| Frontend | frontend/components/Header.tsx | 修改   | 新增文件页签                    |
+Depuis la version de base, ajouts :
+
+* 1 fichier backend
+* 1 page frontend
+* modifications de nombreux fichiers cœur
+* plus de 10 commits
+* corrections de plusieurs failles de sécurité
+
+---
+
+# 4. Tableau récapitulatif
+
+| Type | Fichier | Nature | Description |
+|------|---------|--------|-------------|
+| Backend | nanobot/web/files.py | ajout | module central de stockage |
+| Backend | nanobot/web/server.py | modif | API fichiers + chat attachments |
+| Backend | nanobot/channels/web.py | modif | WebSocket avec pièces jointes |
+| Frontend | frontend/types/index.ts | modif | type FileAttachment |
+| Frontend | frontend/lib/api.ts | modif | API upload/download |
+| Frontend | frontend/app/page.tsx | modif | UI pièces jointes du chat |
+| Frontend | frontend/app/files/page.tsx | ajout | page gestion des fichiers |
+| Frontend | frontend/components/Header.tsx | modif | onglet Fichiers |
 
 ---
