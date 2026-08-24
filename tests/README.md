@@ -1,68 +1,68 @@
-# OpenClaw Platform API 测试
+# Tests de l'API OpenClaw Platform
 
-OpenClaw Platform API 网关（`platform/app/routes`）的集成测试。
+Tests d'intégration de la passerelle API OpenClaw Platform (`platform/app/routes`).
 
-这些测试通过对正在运行的网关服务发起真实的 HTTP 请求来验证已部署的 API 端点。
+Ces tests vérifient les points d'accès API déployés en envoyant de vraies requêtes HTTP au service passerelle en cours d'exécution.
 
-## 前置条件
+## Prérequis
 
-- Docker Compose 服务必须处于运行状态（`docker compose up -d`）
-- 网关必须可访问（默认地址：`http://localhost:8080`）
-- 管理员用户必须存在（首次启动时自动创建）
+- Les services Docker Compose doivent être démarrés (`docker compose up -d`)
+- La passerelle doit être joignable (adresse par défaut : `http://localhost:8080`)
+- L'utilisateur administrateur doit exister (créé automatiquement au premier démarrage)
 
-## 快速开始
+## Démarrage rapide
 
 ```bash
-# 1. 确保服务正在运行
+# 1. Vérifier que les services tournent
 docker compose ps
 
-# 2. 安装 pytest
+# 2. Installer pytest
 pip install pytest
 
-# 3. 运行所有测试
+# 3. Lancer tous les tests
 cd tests
 pytest -v
 
-# 4. 运行指定测试文件
+# 4. Lancer un fichier de test précis
 pytest test_auth.py -v
 
-# 5. 使用自定义 base URL 运行
+# 5. Utiliser une URL de base personnalisée
 OPENCLAW_BASE_URL=http://127.0.0.1:8080 pytest -v
 ```
 
-## 环境变量
+## Variables d'environnement
 
-| 变量 | 默认值 | 说明 |
+| Variable | Valeur par défaut | Description |
 |---|---|---|
-| `OPENCLAW_BASE_URL` | `http://localhost:8080` | API 网关基础地址 |
-| `ADMIN_USERNAME` | `admin` | 认证测试用的管理员用户名 |
-| `ADMIN_PASSWORD` | `admin123` | 认证测试用的管理员密码 |
+| `OPENCLAW_BASE_URL` | `http://localhost:8080` | URL de base de la passerelle API |
+| `ADMIN_USERNAME` | `admin` | Nom d'utilisateur admin pour les tests d'authentification |
+| `ADMIN_PASSWORD` | `admin123` | Mot de passe admin pour les tests d'authentification |
 
-## 测试文件组织
+## Organisation des fichiers de test
 
-每个文件测试 API 的一个功能领域：
+Chaque fichier couvre un domaine fonctionnel de l'API :
 
-| 文件 | 领域 | 覆盖的端点 |
+| Fichier | Domaine | Points d'accès couverts |
 |---|---|---|
-| `test_ping.py` | 健康检查 | `GET /api/ping` |
-| `test_auth.py` | 认证 | `POST /api/auth/register`、`POST /api/auth/login`、`POST /api/auth/refresh`、`GET /api/auth/me`、`POST /api/auth/api-token`、`PUT /api/auth/change-password` |
-| `test_openclaw_dedicated.py` | 专属运行时 | `GET /api/openclaw/agents`、`GET /api/openclaw/skills`、`POST /api/openclaw/marketplaces/skills/search`、`POST /api/openclaw/runtime/prewarm`、`GET /api/openclaw/sessions`、`GET /api/openclaw/commands`、`GET /api/openclaw/container/info`、`GET /api/openclaw/ping` |
-| `test_admin.py` | 管理员管理 | `GET/POST /api/admin/users`、`PUT /api/admin/users/{id}`、`PUT /api/admin/users/{id}/password`、`POST /api/admin/containers/sync`、`GET /api/admin/usage/summary`、`GET /api/admin/usage/history`、`GET /api/admin/audit` |
-| `test_filemanager.py` | 文件管理器 | `GET /api/openclaw/filemanager/browse`、`POST /api/openclaw/filemanager/mkdir`、`DELETE /api/openclaw/filemanager/delete` |
-| `test_llm.py` | LLM 代理 | `POST /llm/v1/chat/completions` |
-| `test_container.py` | 容器管理 | `GET /api/openclaw/container/info`、`POST /api/openclaw/container/doctor-fix`、`GET /api/openclaw/filemanager/download`、`GET /api/openclaw/filemanager/serve` |
+| `test_ping.py` | Sonde de santé | `GET /api/ping` |
+| `test_auth.py` | Authentification | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, `GET /api/auth/me`, `POST /api/auth/api-token`, `PUT /api/auth/change-password` |
+| `test_openclaw_dedicated.py` | Runtime dédié | `GET /api/openclaw/agents`, `GET /api/openclaw/skills`, `POST /api/openclaw/marketplaces/skills/search`, `POST /api/openclaw/runtime/prewarm`, `GET /api/openclaw/sessions`, `GET /api/openclaw/commands`, `GET /api/openclaw/container/info`, `GET /api/openclaw/ping` |
+| `test_admin.py` | Administration | `GET/POST /api/admin/users`, `PUT /api/admin/users/{id}`, `PUT /api/admin/users/{id}/password`, `POST /api/admin/containers/sync`, `GET /api/admin/usage/summary`, `GET /api/admin/usage/history`, `GET /api/admin/audit` |
+| `test_filemanager.py` | Gestionnaire de fichiers | `GET /api/openclaw/filemanager/browse`, `POST /api/openclaw/filemanager/mkdir`, `DELETE /api/openclaw/filemanager/delete` |
+| `test_llm.py` | Proxy LLM | `POST /llm/v1/chat/completions` |
+| `test_container.py` | Gestion des conteneurs | `GET /api/openclaw/container/info`, `POST /api/openclaw/container/doctor-fix`, `GET /api/openclaw/filemanager/download`, `GET /api/openclaw/filemanager/serve` |
 
-## 测试模式
+## Approche de test
 
-所有测试使用 `urllib.request`（Python 标准库），遵循与 `call_agent_api.py` 相同的模式：
+Tous les tests utilisent `urllib.request` (bibliothèque standard Python), selon le même modèle que `call_agent_api.py` :
 
-- **`conftest.py`** 提供共享辅助函数：`api_url()`、`json_request()`、`auth_headers()`、`admin_token()`、`register_user()`
-- 测试通过 `unique_username()` 生成唯一用户名，避免冲突
-- 需要认证的端点会同时测试携带有效令牌和不携带令牌的情况
-- 覆盖异常场景（错误密码、重复用户、缺少字段）
+- **`conftest.py`** fournit les utilitaires partagés : `api_url()`, `json_request()`, `auth_headers()`, `admin_token()`, `register_user()`
+- Les tests génèrent des noms d'utilisateur uniques via `unique_username()` pour éviter les collisions
+- Les points d'accès protégés sont testés avec et sans token valide
+- Les cas d'erreur sont couverts (mauvais mot de passe, utilisateur dupliqué, champ manquant)
 
-## 注意事项
+## Remarques
 
-- 部分端点需要运行中的专属容器（如聊天消息、文件上传）。这些测试可能需要拥有活跃运行时容器的用户。
-- SSE 和 WebSocket 端点不在这些 HTTP 测试的覆盖范围内——它们需要特殊的流式测试基础设施。
-- 测试设计为可对同一部署安全地重复运行。
+- Certains points d'accès exigent un conteneur dédié actif (messages de chat, upload de fichiers). Ces tests peuvent nécessiter un utilisateur disposant d'un conteneur runtime actif.
+- Les points d'accès SSE et WebSocket ne sont pas couverts par ces tests HTTP — ils requièrent une infrastructure de test de streaming spécifique.
+- Les tests sont conçus pour pouvoir être relancés sans risque sur le même déploiement.

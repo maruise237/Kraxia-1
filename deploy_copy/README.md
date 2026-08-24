@@ -1,4 +1,5 @@
-# 默认配置，扩展，skills，和预定义的Agents在部署时自动进行对应的拷贝
+# Modèles de déploiement : agents préconfigurés, compétences (skills), extensions.
+# Synchronisés automatiquement vers les espaces de travail des agents Hermes au démarrage.
 openclaw_defaults.json
 extensions
 skills

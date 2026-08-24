@@ -44,11 +44,11 @@ services:
       PLATFORM_DATABASE_URL: postgresql+asyncpg://nanobot:nanobot@postgres:5432/nanobot_platform
       PLATFORM_JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
 
-      # 启动时自动创建管理员账号
+      # Création automatique du compte administrateur au démarrage
       PLATFORM_ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       PLATFORM_ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
 
-      # LLM API Keys — ONLY here, never in user containers
+      # Clés API LLM — uniquement ici, jamais dans les conteneurs utilisateurs
       PLATFORM_ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       PLATFORM_OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       PLATFORM_OPENAI_API_BASE: ${OPENAI_API_BASE:-}
