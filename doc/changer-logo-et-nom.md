@@ -1,9 +1,16 @@
-## 1.修改
-frontend/index.html
-<link rel="icon" href="/favicon.ico" />
-和<title>OpenClaw AI</title>
+## 1. Modification
 
-## 2. 修改
-frontend/src/components/Brand.tsx
-## 3. 登录页面修改
-frontend/src/pages/Login.tsx
+`frontend/index.html`
+
+```html
+<link rel="icon" href="/favicon.ico" />
+<title>OpenClaw AI</title>
+```
+
+## 2. Modification
+
+`frontend/src/components/Brand.tsx`
+
+## 3. Modification de la page de connexion
+
+`frontend/src/pages/Login.tsx`

@@ -1,8 +1,8 @@
-# 一键构建优化
+# Optimisation du build en une commande
 
-目标：在当前 Docker Desktop 网络环境下，首次构建尽量稳定地控制在 30 分钟内，并避免把时间浪费在运行到一半才发现的镜像源、PyPI、npm、Playwright 下载问题上。
+Objectif : dans l'environnement réseau Docker Desktop actuel, maintenir le premier build sous 30 minutes de façon fiable et éviter de perdre du temps sur des échecs tardifs (miroirs d'images, PyPI, npm, téléchargements Playwright).
 
-## 推荐入口
+## Point d'entrée recommandé
 
 ```powershell
 $env:PYTHONUTF8='1'
@@ -10,57 +10,57 @@ $env:PYTHONIOENCODING='utf-8'
 python build_once.py
 ```
 
-强清理验证：
+Vérification avec nettoyage complet :
 
 ```powershell
 python build_once.py --clean --clean-volumes
 ```
 
-只验证预拉镜像和服务健康：
+Valider uniquement les images pré-téléchargées et la santé des services :
 
 ```powershell
 python build_once.py --skip-build
 ```
 
-## 脚本做了什么
+## Ce que fait le script
 
-1. 检查 Docker daemon。
-2. 预拉外部基础镜像，并在 Docker Hub 网络不稳定时通过镜像源拉取后 tag 回标准镜像名。
-3. 按依赖顺序构建：
+1. Vérifie le démon Docker.
+2. Pré-télécharge les images de base externes ; si Docker Hub est instable, passe par un miroir puis re-tag vers le nom standard.
+3. Construit dans l'ordre des dépendances :
    - `hermes-base:latest`
    - `nanobot-hermes-agent:latest`
-   - compose 服务镜像
-4. 启动 `docker-compose.yml`。
-5. 验证 gateway `/api/ping` 和前端端口。
+   - les images des services compose
+4. Démarre `docker-compose.yml`.
+5. Vérifie `/api/ping` du gateway et les ports des fronts.
 
-## 已固化的构建修复
+## Correctifs de build déjà intégrés
 
-- `postgres:16-alpine` 等 Docker Hub 镜像先预拉，避免 `docker compose up` 末尾卡住。
-- 构建路径不再依赖 `ghcr.io/astral-sh/uv` 基础镜像；改为基于可镜像的 Debian/Python 镜像并从 PyPI 安装 `uv`，避免 GHCR 拉取超时。
-- Hermes 基础镜像不再为 `gosu` 单独拉取 `tianon/gosu` 镜像；改为通过 Debian apt 安装 `gosu`。
-- npm 安装统一使用 `registry.npmmirror.com`、重试参数和 BuildKit cache。
-- PyPI 安装使用官方源，避开当前环境下清华 PyPI wheel 403。
-- Hermes 基础镜像安装系统 `chromium`，并设置 `AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium`，避免 Playwright 镜像源 404，同时保留浏览器能力。
-- Hermes bridge 不再重复 apt 安装基础镜像已经包含的浏览器/系统依赖。
+- Les images Docker Hub (`postgres:16-alpine`, etc.) sont pré-téléchargées pour éviter les blocages en fin de `docker compose up`.
+- Le build ne dépend plus de l'image de base `ghcr.io/astral-sh/uv` ; il s'appuie sur des images Debian/Python miroirables et installe `uv` depuis PyPI — évite les timeouts GHCR.
+- L'image de base Hermes n'importe plus `tianon/gosu` : `gosu` est installé via apt Debian.
+- npm utilise systématiquement `registry.npmmirror.com`, des paramètres de retry et le cache BuildKit.
+- PyPI utilise le dépôt officiel, contournant les 403 du miroir Tsinghua observés dans cet environnement.
+- L'image de base Hermes installe le paquet système `chromium` et définit `AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium` — évite les 404 du miroir Playwright tout en gardant les capacités navigateur.
+- Hermes bridge ne réinstalle pas via apt les dépendances navigateur/système déjà présentes dans l'image de base.
 
-## 强验证记录
+## Journal de vérification complète
 
-2026-05-25 强清理验证：
+2026-05-25 — validation après nettoyage complet :
 
-- 清理范围：项目容器、项目卷、项目镜像、已用基础镜像、未使用网络、BuildKit 构建缓存。
-- 命令：`python build_once.py --clean --clean-volumes`
-- 结果：成功。
-- 总耗时：`1031s`，约 `17 分 11 秒`。
-- 启动验证：
+- Périmètre nettoyé : conteneurs projet, volumes projet, images projet, images de base utilisées, réseaux inutilisés, cache de build BuildKit.
+- Commande : `python build_once.py --clean --clean-volumes`
+- Résultat : succès.
+- Durée totale : `1031 s`, soit environ `17 min 11 s`.
+- Vérifications au démarrage :
   - `http://localhost:8080/api/ping`
   - `http://localhost:3080`
   - `http://localhost:3081/login`
   - `http://localhost:3082`
   - `http://localhost:3083`
 
-## 仍需配置
+## Reste à configurer
 
-服务可启动不代表模型可调用。首次真实使用前需要创建 `.env` 并配置至少一个 LLM API Key，例如：
+Des services démarrés ne signifient pas des modèles appelables. Avant la première vraie utilisation, créez `.env` avec au moins une clé API LLM :
 
 ```env
 DASHSCOPE_API_KEY=...

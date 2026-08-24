@@ -1,14 +1,16 @@
-# 网关认证错误，应该是你启动了其它的openclaw实例，导致和现有openclaw冲突，停止其它openclaw即可
-[  bridge] [gateway-client] Connection closed (unauthorized: gateway token missing (provide gateway auth token)), reconnecting in 2s...
-[  bridge] [gateway-client] Connection closed (unauthorized: gateway token missing (provide gateway auth token)), reconnecting in 2s...
-[  bridge] [gateway-client] Connection closed (unauthorized: gateway token missing (provide gateway auth token)), reconnecting in 2s...
-[  bridge] [gateway-client] Connection closed (unauthorized: gateway token missing (provide gateway auth token)), reconnecting in 2s...
-[  bridge] [gateway-client] Connection closed (unauthorized: gateway token missing (provide gateway auth token)), reconnecting in 2s...
-[  bridge] [gateway-client] Connection closed (unauthorized: gateway token missing (provide gateway auth token)), reconnecting in 2s...
-[  bridge] [gateway-client] Connection closed (unauthorized: gateway token missing (provide gateway auth token)), reconnecting in 2s...
+# Erreur d'authentification de la passerelle
 
+Cause probable : une **autre instance openclaw a été démarrée**, entrant en conflit avec l'instance existante. Arrêtez les autres instances openclaw pour résoudre le problème.
+
+```
+[  bridge] [gateway-client] Connection closed (unauthorized: gateway token missing (provide gateway auth token)), reconnecting in 2s...
+[  bridge] [gateway-client] Connection closed (unauthorized: gateway token missing (provide gateway auth token)), reconnecting in 2s...
+[  bridge] [gateway-client] Connection closed (unauthorized: gateway token missing (provide gateway auth token)), reconnecting in 2s...
+```
+
+```
 ⏺ Update(~/.openclaw/openclaw.json)
-  ⎿  Added 2 lines, removed 1 line
+  ⎿  Added 2 lines, removed 1 line
       57      "port": 18789,
       58      "bind": "loopback",
       59      "auth": {
@@ -18,6 +20,4 @@
       62      },
       63      "controlUi": {
       64        "allowedOrigins": [
-
-
-
+```

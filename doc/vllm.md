@@ -1,32 +1,32 @@
-# 使用 vLLM 本地部署模型
+# Déployer un modèle en local avec vLLM
 
-本文档介绍如何将项目从 DashScope（阿里云通义千问）切换到本地 vLLM 推理服务。
-
----
-
-## 什么是 vLLM
-
-[vLLM](https://github.com/vllm-project/vllm) 是一个高性能的开源大模型推理框架，支持运行 Llama、Qwen、Mistral、DeepSeek 等主流开源模型。它提供与 OpenAI API 完全兼容的接口，因此项目可以无缝切换。
-
-**适用场景：**
-- 私有化部署，数据不出内网
-- 离线环境或无法使用云端 API
-- 需要更低延迟或更高吞吐量
-- 使用自定义微调模型
+Ce document décrit comment basculer le projet de DashScope (Alibaba Qwen) vers un service d'inférence vLLM local.
 
 ---
 
-## 第一步：启动 vLLM 服务
+## Qu'est-ce que vLLM
 
-### 安装 vLLM
+[vLLM](https://github.com/vllm-project/vllm) est un framework d'inférence open source haute performance pour grands modèles, capable d'exécuter Llama, Qwen, Mistral, DeepSeek et autres modèles open source majeurs. Il expose une interface totalement compatible avec l'API OpenAI — le projet peut donc basculer sans friction.
+
+**Cas d'usage :**
+- déploiement privé, données confinées au réseau interne
+- environnement hors ligne ou sans accès aux API cloud
+- besoin de latence plus faible ou de débit supérieur
+- utilisation de modèles fine-tunés maison
+
+---
+
+## Étape 1 : démarrer le service vLLM
+
+### Installer vLLM
 
 ```bash
 pip install vllm
 ```
 
-### 启动推理服务
+### Démarrer le service d'inférence
 
-以 Qwen2.5-7B-Instruct 为例：
+Exemple avec Qwen2.5-7B-Instruct :
 
 ```bash
 vllm serve Qwen/Qwen2.5-7B-Instruct \
@@ -35,25 +35,25 @@ vllm serve Qwen/Qwen2.5-7B-Instruct \
   --served-model-name Qwen2.5-7B-Instruct
 ```
 
-启动后，API 地址为 `http://localhost:8000/v1`。
+Une fois démarré, l'API écoute sur `http://localhost:8000/v1`.
 
-验证服务是否正常：
+Vérifier le service :
 
 ```bash
 curl http://localhost:8000/v1/models
 ```
 
-> **注意：** `--served-model-name` 指定的名称就是后续配置中使用的模型名。
+> **Remarque :** le nom donné à `--served-model-name` est le nom de modèle à utiliser dans la configuration.
 
 ---
 
-## 第二步：配置项目
+## Étape 2 : configurer le projet
 
-项目的主配置文件位于 `~/.nanobot/config.json`（JSON 格式）。
+Le fichier de configuration principal se trouve dans `~/.nanobot/config.json` (JSON).
 
-### 方式一：修改 config.json（推荐）
+### Méthode 1 : modifier config.json (recommandé)
 
-编辑 `~/.nanobot/config.json`，在 `providers` 下添加 `vllm` 配置，并修改默认模型：
+Éditez `~/.nanobot/config.json`, ajoutez la configuration `vllm` sous `providers` et changez le modèle par défaut :
 
 ```json
 {
@@ -71,45 +71,45 @@ curl http://localhost:8000/v1/models
 }
 ```
 
-**字段说明：**
+**Champs :**
 
-| 字段 | 说明 |
-|------|------|
-| `providers.vllm.apiKey` | vLLM 默认不需要鉴权，填 `"EMPTY"` 即可；如果启动时设置了 `--api-key`，则填对应的值 |
-| `providers.vllm.apiBase` | vLLM 服务地址，需包含 `/v1` 路径 |
-| `agents.defaults.model` | 模型名称，须与 vLLM `--served-model-name` 保持一致 |
+| Champ | Description |
+|-------|-------------|
+| `providers.vllm.apiKey` | vLLM ne requiert pas d'authentification par défaut : `"EMPTY"` suffit ; si `--api-key` a été passé au démarrage, indiquez cette valeur |
+| `providers.vllm.apiBase` | Adresse du service vLLM, incluant le chemin `/v1` |
+| `agents.defaults.model` | Nom du modèle, identique à `--served-model-name` de vLLM |
 
-### 方式二：环境变量
+### Méthode 2 : variables d'environnement
 
-也可以通过环境变量（或 `.env` 文件）覆盖配置，无需修改 config.json：
+Vous pouvez aussi surcharger via des variables d'environnement (ou un fichier `.env`) sans toucher à config.json :
 
 ```bash
-# .env 文件
+# fichier .env
 NANOBOT_PROVIDERS__VLLM__API_KEY=EMPTY
 NANOBOT_PROVIDERS__VLLM__API_BASE=http://localhost:8000/v1
 NANOBOT_AGENTS__DEFAULTS__MODEL=Qwen2.5-7B-Instruct
 ```
 
-> 环境变量前缀为 `NANOBOT_`，层级间用双下划线 `__` 分隔。
+> Préfixe `NANOBOT_`, hiérarchie séparée par double tiret bas `__`.
 
 ---
 
-## 与 DashScope 配置对比
+## Comparaison avec la configuration DashScope
 
-| 配置项 | DashScope（当前） | vLLM（本地） |
-|--------|-------------------|--------------|
-| `.env` 中的 Key | `DASHSCOPE_API_KEY=sk-xxx` | 无需 Key（或 `EMPTY`） |
-| config.json provider | `"dashscope": {"apiKey": "sk-xxx"}` | `"vllm": {"apiKey": "EMPTY", "apiBase": "http://..."}` |
-| 模型名示例 | `qwen-max` | `Qwen2.5-7B-Instruct` |
-| LiteLLM 内部路由 | `dashscope/qwen-max` | `hosted_vllm/Qwen2.5-7B-Instruct` |
+| Élément | DashScope (actuel) | vLLM (local) |
+|---------|--------------------|--------------|
+| Clé dans `.env` | `DASHSCOPE_API_KEY=sk-xxx` | aucune clé requise (ou `EMPTY`) |
+| Provider config.json | `"dashscope": {"apiKey": "sk-xxx"}` | `"vllm": {"apiKey": "EMPTY", "apiBase": "http://..."}` |
+| Exemple de modèle | `qwen-max` | `Qwen2.5-7B-Instruct` |
+| Routage interne LiteLLM | `dashscope/qwen-max` | `hosted_vllm/Qwen2.5-7B-Instruct` |
 
-切换时只需更改 `providers` 和 `agents.defaults.model`，无需修改其他代码。
+La bascule ne modifie que `providers` et `agents.defaults.model` — aucun autre code.
 
 ---
 
-## 完整 config.json 示例
+## Exemple complet de config.json
 
-以下是一个最小化的完整配置（其他字段保留默认值）：
+Configuration minimale complète (les autres champs gardent leur valeur par défaut) :
 
 ```json
 {
@@ -131,27 +131,27 @@ NANOBOT_AGENTS__DEFAULTS__MODEL=Qwen2.5-7B-Instruct
 
 ---
 
-## 常用模型启动命令
+## Commandes de démarrage courantes
 
-### Qwen2.5 系列
+### Série Qwen2.5
 
 ```bash
-# 7B，消费级 GPU（24GB 显存）
+# 7B, GPU grand public (24 Go VRAM)
 vllm serve Qwen/Qwen2.5-7B-Instruct --served-model-name Qwen2.5-7B-Instruct
 
-# 72B，多卡
+# 72B, multi-GPU
 vllm serve Qwen/Qwen2.5-72B-Instruct --served-model-name Qwen2.5-72B-Instruct \
   --tensor-parallel-size 4
 ```
 
-### DeepSeek 系列
+### Série DeepSeek
 
 ```bash
 vllm serve deepseek-ai/DeepSeek-R1-Distill-Qwen-7B \
   --served-model-name DeepSeek-R1-7B
 ```
 
-### Llama 系列
+### Série Llama
 
 ```bash
 vllm serve meta-llama/Llama-3.1-8B-Instruct \
@@ -160,11 +160,11 @@ vllm serve meta-llama/Llama-3.1-8B-Instruct \
 
 ---
 
-## 工具调用（Tool Calling）支持
+## Support des appels d'outils (Tool Calling)
 
-vLLM 支持工具调用，但需要模型本身支持 Function Calling（如 Qwen2.5-Instruct、Llama-3.1-Instruct 等）。
+vLLM supporte les appels d'outils, à condition que le modèle gère nativement le Function Calling (ex. Qwen2.5-Instruct, Llama-3.1-Instruct…).
 
-启动时建议加上：
+Ajoutez au démarrage :
 
 ```bash
 vllm serve Qwen/Qwen2.5-7B-Instruct \
@@ -173,10 +173,10 @@ vllm serve Qwen/Qwen2.5-7B-Instruct \
   --tool-call-parser hermes
 ```
 
-不同模型对应的 `--tool-call-parser` 值：
+Valeurs de `--tool-call-parser` selon les familles de modèles :
 
-| 模型系列 | parser |
-|----------|--------|
+| Famille | parser |
+|---------|--------|
 | Qwen2.5 | `hermes` |
 | Llama 3.1/3.2 | `llama3_json` |
 | Mistral | `mistral` |
@@ -184,17 +184,22 @@ vllm serve Qwen/Qwen2.5-7B-Instruct \
 
 ---
 
-## 部署完成后的curl测试
-```
+## Test curl après déploiement
+
+```bash
 curl -X POST http://localhost:8000/v1/chat/completions \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer Empty" \
      -d '{
            "model": "Qwen2.5-7B-Instruct",
            "messages": [
-               {"role": "user", "content": "你好"}
+               {"role": "user", "content": "Bonjour"}
            ]
          }'
-输出
-{"id":"chatcmpl-8c9ba236ade65176","object":"chat.completion","created":1773411630,"model":"Qwen2.5-7B-Instruct","choices":[{"index":0,"message":{"role":"assistant","content":"你好！很高兴为你提供帮助。有什么问题或需要什么信息我可以帮你查找吗？","refusal":null,"annotations":null,"audio":null,"function_call":null,"tool_calls":[],"reasoning":null},"logprobs":null,"finish_reason":"stop","stop_reason":null,"token_ids":null}],"service_tier":null,"system_fingerprint":null,"usage":{"prompt_tokens":30,"total_tokens":49,"completion_tokens":19,"prompt_tokens_details":null},"prompt_logprobs":null,"prompt_token_ids":null,"kv_transfer_params":null}%
+```
+
+Réponse :
+
+```json
+{"id":"chatcmpl-8c9ba236ade65176","object":"chat.completion","created":1773411630,"model":"Qwen2.5-7B-Instruct","choices":[{"index":0,"message":{"role":"assistant","content":"Bonjour ! Ravi de vous aider..."},"logprobs":null,"finish_reason":"stop","stop_reason":null,"token_ids":null}],"service_tier":null,"system_fingerprint":null,"usage":{"prompt_tokens":30,"total_tokens":49,"completion_tokens":19,"prompt_tokens_details":null},"prompt_logprobs":null,"prompt_token_ids":null,"kv_transfer_params":null}
 ```

@@ -1,5 +1,8 @@
-# 飞书配置
-渠道管理--飞书设置---json模式
+# Configuration Feishu
+
+Gestion des canaux → Réglages Feishu → mode JSON :
+
+```json
 {
   "enabled": true,
   "appId": "cli_axxxx",
@@ -12,3 +15,4 @@
     "*"
   ]
 }
+```

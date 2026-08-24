@@ -1,13 +1,25 @@
-# 部署到没有网络的内部机器的步骤
+# Déploiement sur une machine interne sans Internet
 
-步骤 1 — 有网络的机器上打包：
-- python offline_deploy.py pack --host 192.168.1.100
-- 构建所有镜像（openclaw基础镜像 + gateway + frontend + manage-front + postgres），导出到 openclaw-images.tar。
+## Étape 1 — empaqueter depuis une machine connectée
 
-步骤 2 — 拷贝到目标服务器（脚本会提示具体命令）：
-- scp openclaw-images.tar user@192.168.1.100:/data/server/nanobot/
-- 或 rsync 整个项目目录
+```bash
+python offline_deploy.py pack --host 192.168.1.100
+```
 
-步骤 3 — 目标服务器上部署：
-- python offline_deploy.py deploy --host 192.168.1.100
-- 导入镜像、验证、启动服务、健康检查。
+Construit toutes les images (openclaw base + gateway + frontend + manage-front + postgres) et les exporte vers `openclaw-images.tar`.
+
+## Étape 2 — copier vers le serveur cible (le script affiche les commandes exactes)
+
+```bash
+scp openclaw-images.tar user@192.168.1.100:/data/server/nanobot/
+# ou synchroniser tout le répertoire du projet :
+rsync -av ./ user@192.168.1.100:/data/server/nanobot/
+```
+
+## Étape 3 — déployer sur le serveur cible
+
+```bash
+python offline_deploy.py deploy --host 192.168.1.100
+```
+
+Importe les images, vérifie, démarre les services et exécute les contrôles de santé.
