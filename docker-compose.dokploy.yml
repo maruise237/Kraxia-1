@@ -1,0 +1,189 @@
+# OpenClaw Multi-User — variante Dokploy
+#
+# Différences avec docker-compose.yml :
+#   1. Ajout de 2 services "builder" qui construisent les images runtime utilisateur
+#      (hermes-base:latest puis nanobot-hermes-agent:latest) — indispensables car
+#      le gateway crée les conteneurs utilisateurs depuis nanobot-hermes-agent:latest.
+#   2. PostgreSQL n'est plus exposé sur l'hôte (réseau interne uniquement).
+#   3. Miroirs APT par défaut = officiels Debian (surchargeables via .env).
+#   4. Politique restart: unless-stopped sur les services persistants.
+#
+# Déploiement Dokploy : type "Compose" -> source Git -> fichier docker-compose.dokploy.yml
+# Domaine (HTTPS Traefik) : pointer le service `frontend`, port interne 3000.
+
+name: openclaw
+
+services:
+  # ── Images runtime utilisateur (builder-only : construisent puis s'arrêtent) ──
+  hermes-base-image:
+    build:
+      context: ./hermes-agent
+      dockerfile: Dockerfile
+      args:
+        APT_DEBIAN_MIRROR: ${APT_DEBIAN_MIRROR:-}
+        APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    image: hermes-base:latest
+    entrypoint: ["true"]
+    restart: "no"
+
+  hermes-agent-image:
+    build:
+      context: ./hermes-agent
+      dockerfile: Dockerfile.bridge
+      args:
+        BASE_TAG: latest
+        APT_DEBIAN_MIRROR: ${APT_DEBIAN_MIRROR:-}
+        APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+        HERMES_INSTALL_BROWSER: ${HERMES_INSTALL_BROWSER:-false}
+        HERMES_INSTALL_WHATSAPP_BRIDGE: ${HERMES_INSTALL_WHATSAPP_BRIDGE:-false}
+    image: nanobot-hermes-agent:latest
+    entrypoint: ["true"]
+    restart: "no"
+    depends_on:
+      hermes-base-image:
+        condition: service_completed_successfully
+
+  # ── Base de données ──
+  postgres:
+    container_name: openclaw-postgres
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nanobot
+      POSTGRES_PASSWORD: nanobot
+      POSTGRES_DB: nanobot_platform
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - openclaw-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nanobot -d nanobot_platform"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Passerelle plateforme ──
+  gateway:
+    container_name: openclaw-gateway
+    build:
+      context: ./platform
+      args:
+        APT_DEBIAN_MIRROR: ${APT_DEBIAN_MIRROR:-}
+        APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    environment:
+      PLATFORM_DATABASE_URL: postgresql+asyncpg://nanobot:nanobot@postgres:5432/nanobot_platform
+      PLATFORM_JWT_SECRET: ${JWT_SECRET:?JWT_SECRET requis}
+
+      PLATFORM_ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      PLATFORM_ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+
+      # Clés LLM — uniquement ici, jamais dans les conteneurs utilisateurs
+      PLATFORM_ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      PLATFORM_OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      PLATFORM_OPENAI_API_BASE: ${OPENAI_API_BASE:-}
+      PLATFORM_DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      PLATFORM_OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      PLATFORM_DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      PLATFORM_MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
+      PLATFORM_MINIMAX_API_BASE: ${MINIMAX_API_BASE:-}
+      PLATFORM_AIHUBMIX_API_KEY: ${AIHUBMIX_API_KEY:-}
+      PLATFORM_EVOLINK_API_KEY: ${EVOLINK_API_KEY:-}
+      PLATFORM_MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
+      PLATFORM_KIMI_API_KEY: ${KIMI_API_KEY:-}
+      PLATFORM_ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      PLATFORM_DOUBAO_API_KEY: ${DOUBAO_API_KEY:-}
+      PLATFORM_HOSTED_VLLM_API_KEY: ${HOSTED_VLLM_API_KEY:-}
+      PLATFORM_HOSTED_VLLM_API_BASE: ${HOSTED_VLLM_API_BASE:-}
+
+      PLATFORM_DEFAULT_MODEL: ${DEFAULT_MODEL:-dashscope/qwen3-coder-plus}
+      PLATFORM_OPENCLAW_IMAGE: ${PLATFORM_OPENCLAW_IMAGE:-openclaw:latest}
+      PLATFORM_HERMES_IMAGE: ${PLATFORM_HERMES_IMAGE:-nanobot-hermes-agent:latest}
+      PLATFORM_DEDICATED_RUNTIME_BACKEND: ${PLATFORM_DEDICATED_RUNTIME_BACKEND:-hermes}
+      PLATFORM_HERMES_CONNECT_RETRIES: ${PLATFORM_HERMES_CONNECT_RETRIES:-60}
+      PLATFORM_HERMES_RETRY_DELAY_SECONDS: ${PLATFORM_HERMES_RETRY_DELAY_SECONDS:-0.5}
+      PLATFORM_HERMES_API_TOOLSETS: ${PLATFORM_HERMES_API_TOOLSETS:-terminal,file,skills}
+      PLATFORM_HERMES_REASONING_EFFORT: ${PLATFORM_HERMES_REASONING_EFFORT:-none}
+      PLATFORM_HERMES_SERVICE_TIER: ${PLATFORM_HERMES_SERVICE_TIER:-}
+      PLATFORM_MINIMAX_M27_USE_HIGHSPEED: ${MINIMAX_M27_USE_HIGHSPEED:-true}
+      PLATFORM_DEDICATED_HERMES_URL: ${PLATFORM_DEDICATED_HERMES_URL:-}
+      PLATFORM_DEV_OPENCLAW_URL: ${PLATFORM_DEV_OPENCLAW_URL:-}
+      PLATFORM_CONTAINER_NETWORK: openclaw-internal
+
+      # Mode partagé désactivé : aucun service shared-openclaw dans ce stack.
+      PLATFORM_SHARED_OPENCLAW_ENABLED: "false"
+      PLATFORM_SHARED_RUNTIME_BACKEND: ${PLATFORM_SHARED_RUNTIME_BACKEND:-hermes}
+      PLATFORM_CONTAINER_TZ: ${CONTAINER_TZ:-Europe/Paris}
+      PLATFORM_CONTAINER_MEMORY_LIMIT: ${PLATFORM_CONTAINER_MEMORY_LIMIT:-2g}
+      PLATFORM_CONTAINER_SHM_SIZE: ${PLATFORM_CONTAINER_SHM_SIZE:-1g}
+      PLATFORM_TRAINING_TRACE_ENABLED: "false"
+      PLATFORM_TRAINING_TRACE_INGEST_ENABLED: "false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./.hermes/benchmarks:/app/.hermes/benchmarks:ro
+      - ./.hermes/training_traces:/app/.hermes/training_traces
+    networks:
+      - openclaw-internal
+      - openclaw-external
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Fronts ──
+  frontend:
+    container_name: openclaw-frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+    ports:
+      - "${FRONTEND_PORT:-3080}:3000"
+    networks:
+      - openclaw-external
+    depends_on:
+      - gateway
+    restart: unless-stopped
+
+  manage-front:
+    container_name: openclaw-manage
+    build: ./manage_front
+    ports:
+      - "${MANAGE_PORT:-3081}:3000"
+    environment:
+      - API_URL=http://gateway:8080
+    networks:
+      - openclaw-external
+    depends_on:
+      - gateway
+    restart: unless-stopped
+
+  simple-front:
+    container_name: openclaw-simple
+    build:
+      context: ./simple_front
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+    ports:
+      - "${SIMPLE_PORT:-3082}:3000"
+    networks:
+      - openclaw-external
+    depends_on:
+      - gateway
+    restart: unless-stopped
+
+networks:
+  openclaw-internal:
+    name: openclaw-internal
+    driver: bridge
+    internal: false
+  openclaw-external:
+    name: openclaw-external
+    driver: bridge
+
+volumes:
+  pgdata:
