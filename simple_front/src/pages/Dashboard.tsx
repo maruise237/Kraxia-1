@@ -63,7 +63,7 @@ function AssistantCardSkeleton() {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { agents, agentsLoading, refreshAgents } = useOutletContext<LayoutOutletContext>()
+  const { user, agents, agentsLoading, refreshAgents } = useOutletContext<LayoutOutletContext>()
   const [assistantPanelOpen, setAssistantPanelOpen] = useState(false)
 
   const builtInAssistants = agents.filter(assistant => builtInAssistantIds.has(assistant.id))
@@ -98,10 +98,10 @@ export default function Dashboard() {
               </button>
               <button
                 type="button"
-                onClick={() => navigate('/settings')}
+                onClick={() => navigate(user?.onboarding_completed ? '/settings' : '/onboarding')}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 text-sm font-medium text-white transition-colors hover:bg-white/15"
               >
-                Connecter un canal
+                {user?.onboarding_completed ? 'Connecter un canal' : 'Configurer mon espace'}
               </button>
             </div>
           </div>

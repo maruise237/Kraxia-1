@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout.tsx'
 import Login from './pages/Login.tsx'
 import Dashboard from './pages/Dashboard.tsx'
+import Onboarding from './pages/Onboarding.tsx'
 import Chat from './pages/Chat.tsx'
 import Settings from './pages/Settings.tsx'
 import KnowledgeBase from './pages/KnowledgeBase.tsx'
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="onboarding" element={<Onboarding />} />
           <Route path="dashboard/knowledge" element={<Navigate to="/knowledge" replace />} />
           <Route path="knowledge" element={<KnowledgeBase />} />
           <Route path="skills" element={<SkillStore />} />

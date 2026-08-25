@@ -18,6 +18,35 @@ export interface AuthUser {
   username: string
   email: string
   created_at: string
+  onboarding_completed?: boolean
+  assistant_goal?: string | null
+  preferred_language?: string
+  preferred_tone?: string
+  preferred_channels?: string[]
+  plan?: {
+    code: string
+    name: string
+    launch_price_fcfa: number
+    regular_price_fcfa: number
+    ram_bytes: number
+    storage_bytes: number
+    llm_credit_cents: number
+    allowed_channels: string[]
+  }
+  subscription?: {
+    status: string
+    payment_provider?: string | null
+    starts_at?: string | null
+    current_period_end?: string | null
+  }
+  usage?: {
+    storage_bytes_used: number
+    llm_credit_cents_used: number
+    llm_credit_cents_remaining: number
+    llm_input_tokens: number
+    llm_output_tokens: number
+    updated_at?: string | null
+  }
 }
 
 export interface AgentInfo {
@@ -466,6 +495,20 @@ export function logout(): void {
 
 export async function getMe(): Promise<AuthUser> {
   return fetchJSON<AuthUser>('/api/auth/me')
+}
+
+export interface PreferencesInput {
+  assistant_goal: string
+  preferred_language: string
+  preferred_tone: string
+  preferred_channels: string[]
+}
+
+export async function updatePreferences(input: PreferencesInput): Promise<AuthUser> {
+  return fetchJSON<AuthUser>('/api/auth/preferences', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
 }
 
 // ---------------------------------------------------------------------------

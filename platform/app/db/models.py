@@ -37,6 +37,11 @@ class User(Base):
     # SSO fields (e.g. 如果需要SSO登录，需要这2个字段)
     sso_uid: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True, index=True)
     sso_token: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    onboarding_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    assistant_goal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    preferred_language: Mapped[str] = mapped_column(String(16), nullable=False, default="fr", server_default="fr")
+    preferred_tone: Mapped[str] = mapped_column(String(32), nullable=False, default="simple", server_default="simple")
+    preferred_channels: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

@@ -67,6 +67,18 @@ class UserResponse(BaseModel):
     plan: dict[str, object] | None = None
     subscription: dict[str, object] | None = None
     usage: dict[str, object] | None = None
+    onboarding_completed: bool = False
+    assistant_goal: str | None = None
+    preferred_language: str = "fr"
+    preferred_tone: str = "simple"
+    preferred_channels: list[str] = []
+
+
+class PreferencesRequest(BaseModel):
+    assistant_goal: str
+    preferred_language: str = "fr"
+    preferred_tone: str = "simple"
+    preferred_channels: list[str] = []
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +176,32 @@ async def get_me(user: User = Depends(get_current_user), db: AsyncSession = Depe
         plan=snapshot["plan"],
         subscription=snapshot["subscription"],
         usage=snapshot["usage"],
+        onboarding_completed=user.onboarding_completed,
+        assistant_goal=user.assistant_goal,
+        preferred_language=user.preferred_language,
+        preferred_tone=user.preferred_tone,
+        preferred_channels=user.preferred_channels,
     )
+
+
+@router.put("/preferences", response_model=UserResponse)
+async def update_preferences(
+    req: PreferencesRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    goal = req.assistant_goal.strip()
+    if len(goal) < 3 or len(goal) > 2000:
+        raise HTTPException(status_code=400, detail="Décris ton besoin en 3 à 2000 caractères.")
+    allowed_channels = {"whatsapp", "telegram", "discord"}
+    channels = [channel for channel in req.preferred_channels if channel in allowed_channels]
+    user.assistant_goal = goal
+    user.preferred_language = (req.preferred_language or "fr")[:16]
+    user.preferred_tone = (req.preferred_tone or "simple")[:32]
+    user.preferred_channels = channels
+    user.onboarding_completed = True
+    await db.commit()
+    return await get_me(user=user, db=db)
 
 
 class ApiTokenResponse(BaseModel):
