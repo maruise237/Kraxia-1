@@ -532,6 +532,27 @@ def _write_hermes_runtime_files(container: docker.models.containers.Container) -
     _repair_hermes_data_ownership(container)
 
 
+def update_hermes_channel_env(
+    container: docker.models.containers.Container,
+    channel_env: dict[str, str],
+) -> None:
+    """Merge channel variables into the private Hermes .env and restart safely."""
+    existing = _read_existing_hermes_env_channel_vars(container)
+    merged = {**existing, **channel_env}
+    env_content = _build_hermes_env_file(merged).encode("utf-8")
+    tar_buffer = io.BytesIO()
+    with tarfile.open(fileobj=tar_buffer, mode="w") as tar:
+        env_file = tarfile.TarInfo(name=".env")
+        env_file.size = len(env_content)
+        env_file.mode = 0o600
+        env_file.mtime = int(time.time())
+        tar.addfile(env_file, io.BytesIO(env_content))
+    tar_buffer.seek(0)
+    if not container.put_archive("/opt/data", tar_buffer.read()):
+        raise RuntimeError("failed to update Hermes channel configuration")
+    container.restart()
+
+
 def _build_expose_port_skill_markdown(
     user_id: str,
     container_name: str,

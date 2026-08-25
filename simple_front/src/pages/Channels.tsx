@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { Check, Link2, Loader2, MessageCircle, ShieldCheck, Trash2 } from 'lucide-react'
 import { connectChannel, disconnectChannel, listChannels, type ChannelConnectionInfo } from '../lib/api.ts'
 
-const channelCopy: Record<string, { title: string; description: string; placeholder: string }> = {
-  whatsapp: { title: 'WhatsApp', description: 'Retrouve ton assistant dans tes échanges du quotidien.', placeholder: 'Colle ici ton identifiant de connexion WhatsApp' },
-  telegram: { title: 'Telegram', description: 'Discute avec ton assistant depuis Telegram.', placeholder: 'Colle ici le token de ton bot Telegram' },
-  discord: { title: 'Discord', description: 'Donne à ton assistant une place dans ton espace Discord.', placeholder: 'Colle ici le token de ton bot Discord' },
+const channelCopy: Record<string, { title: string; description: string; placeholder: string; credentialKey: string }> = {
+  whatsapp: { title: 'WhatsApp', description: 'Retrouve ton assistant dans tes échanges du quotidien.', placeholder: 'Ton numéro autorisé avec indicatif, sans le signe +', credentialKey: 'allowed_users' },
+  telegram: { title: 'Telegram', description: 'Discute avec ton assistant depuis Telegram.', placeholder: 'Colle ici le token de ton bot Telegram', credentialKey: 'token' },
+  discord: { title: 'Discord', description: 'Donne à ton assistant une place dans ton espace Discord.', placeholder: 'Colle ici le token de ton bot Discord', credentialKey: 'token' },
 }
 
 export default function Channels() {
@@ -35,7 +35,7 @@ export default function Channels() {
     setSaving(channel)
     setNotice('')
     try {
-      await connectChannel(channel, { display_name: channelCopy[channel].title, credentials: { token: value } })
+      await connectChannel(channel, { display_name: channelCopy[channel].title, credentials: { [channelCopy[channel].credentialKey]: value } })
       setValues(current => ({ ...current, [channel]: '' }))
       setNotice(`${channelCopy[channel].title} est maintenant configuré.`)
       await refresh()
@@ -80,7 +80,8 @@ export default function Channels() {
           {loading ? <div className="flex items-center gap-2 text-sm text-light-text-secondary"><Loader2 size={16} className="animate-spin" /> Chargement de tes canaux…</div> : items.map(item => {
             const copy = channelCopy[item.channel]
             if (!copy) return null
-            const connected = item.status !== 'not_connected'
+            const connected = item.status === 'connected' || item.status === 'pairing_required'
+            const pairingRequired = item.status === 'pairing_required'
             return (
               <section key={item.channel} className="rounded-2xl border border-light-border bg-light-card p-5 shadow-sm sm:p-6">
                 <div className="flex items-start gap-4">
@@ -88,14 +89,15 @@ export default function Channels() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-base font-semibold text-light-text">{copy.title}</h2>
-                      {connected && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700"><Check size={12} /> Connecté</span>}
+                      {connected && <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${pairingRequired ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}><Check size={12} /> {pairingRequired ? 'Appairage à terminer' : 'Connecté'}</span>}
+                      {item.status === 'error' && <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-1 text-xs font-medium text-red-700">À vérifier</span>}
                     </div>
                     <p className="mt-1 text-sm text-light-text-secondary">{copy.description}</p>
                   </div>
                 </div>
                 {connected ? (
                   <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-light-bg px-3.5 py-3">
-                    <span className="text-sm text-light-text-secondary">Connexion protégée enregistrée</span>
+                    <span className="text-sm text-light-text-secondary">{pairingRequired ? 'Le téléphone doit encore être appairé avec WhatsApp.' : 'Connexion protégée enregistrée'}</span>
                     <button type="button" onClick={() => void remove(item.channel)} disabled={saving === item.channel} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"><Trash2 size={15} /> Déconnecter</button>
                   </div>
                 ) : (

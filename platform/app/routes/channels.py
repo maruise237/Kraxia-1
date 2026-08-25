@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
 from app.config import settings
+from app.container.manager import ensure_running, get_docker_container, update_hermes_channel_env
 from app.db.engine import get_db
 from app.db.models import ChannelConnection, User
 
@@ -80,6 +81,19 @@ async def connect_channel(
     if not credentials:
         raise HTTPException(status_code=400, detail="Ajoute les informations de connexion du canal.")
 
+    env_map = {
+        "telegram": {"token": "TELEGRAM_BOT_TOKEN", "allowed_users": "TELEGRAM_ALLOWED_USERS"},
+        "discord": {"token": "DISCORD_BOT_TOKEN", "allowed_users": "DISCORD_ALLOWED_USERS"},
+        "whatsapp": {"allowed_users": "WHATSAPP_ALLOWED_USERS"},
+    }[channel]
+    unknown_keys = set(credentials) - set(env_map)
+    if unknown_keys:
+        raise HTTPException(status_code=400, detail="Informations de connexion non reconnues pour ce canal.")
+    if channel == "whatsapp":
+        credentials.setdefault("enabled", "true")
+        credentials.setdefault("mode", "bot")
+        env_map.update({"enabled": "WHATSAPP_ENABLED", "mode": "WHATSAPP_MODE"})
+
     result = await db.execute(
         select(ChannelConnection).where(
             ChannelConnection.user_id == user.id,
@@ -100,6 +114,24 @@ async def connect_channel(
         connection.last_error = None
     connection.display_name = (req.display_name or channel.title())[:128]
     connection.connected_at = datetime.utcnow()
+
+    try:
+        runtime = await ensure_running(db, user.id)
+        if settings.dedicated_runtime_backend != "hermes":
+            raise RuntimeError("Le runtime Hermes est requis pour connecter ce canal.")
+        docker_container = get_docker_container(runtime.docker_id or runtime.container_name)
+        update_hermes_channel_env(
+            docker_container,
+            {env_map[key]: value for key, value in credentials.items() if key in env_map},
+        )
+        connection.status = "pairing_required" if channel == "whatsapp" else "connected"
+        connection.last_error = None
+    except Exception as exc:
+        connection.status = "error"
+        connection.last_error = str(exc)[:1000]
+        await db.commit()
+        raise HTTPException(status_code=502, detail="Le canal n’a pas pu être démarré. Vérifie les informations fournies.") from exc
+
     await db.commit()
     return {
         "ok": True,
