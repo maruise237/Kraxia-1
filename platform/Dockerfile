@@ -6,11 +6,13 @@ ARG PIP_INDEX_URL=https://pypi.org/simple
 ARG APT_DEBIAN_MIRROR=http://mirrors.ustc.edu.cn/debian
 ARG APT_SECURITY_MIRROR=http://mirrors.ustc.edu.cn/debian-security
 
-RUN sed -i \
-        -e "s|http://deb.debian.org/debian|${APT_DEBIAN_MIRROR}|g" \
-        -e "s|http://deb.debian.org/debian-security|${APT_SECURITY_MIRROR}|g" \
-        /etc/apt/sources.list.d/debian.sources \
-    && apt-get -o Acquire::Retries=5 update \
+RUN if [ -n "${APT_DEBIAN_MIRROR}" ]; then \
+        sed -i "s|http://deb.debian.org/debian|${APT_DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources; \
+    fi && \
+    if [ -n "${APT_SECURITY_MIRROR}" ]; then \
+        sed -i "s|http://deb.debian.org/debian-security|${APT_SECURITY_MIRROR}|g" /etc/apt/sources.list.d/debian.sources; \
+    fi && \
+    apt-get -o Acquire::Retries=5 update \
     && apt-get install -y --no-install-recommends git openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
