@@ -196,9 +196,9 @@ RUN npm install --prefer-offline --no-audit && \
 # while still making Matrix work in the published container. Fixes #30399.
 #
 # The editable link is created after the source copy below.
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml ./
 RUN touch ./README.md
-RUN uv sync --frozen --no-install-project --extra all --extra messaging --extra anthropic --extra bedrock --extra azure-identity --extra hindsight --extra matrix
+RUN uv sync --no-install-project --extra all --extra messaging --extra anthropic --extra bedrock --extra azure-identity --extra hindsight --extra matrix
 
 # ---------- Frontend build (cached independently from Python source) ----------
 # Copy only the frontend source trees first so that Python-only changes don't
