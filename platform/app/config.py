@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60 * 24  # 24 hours
     jwt_refresh_token_expire_days: int = 30
+    # Fernet key for channel credentials; production should set this explicitly.
+    channel_encryption_key: str = ""
 
     # LLM Provider API Keys (platform-level, never exposed to containers)
     anthropic_api_key: str = ""

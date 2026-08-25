@@ -3,6 +3,7 @@ import Layout from './components/Layout.tsx'
 import Login from './pages/Login.tsx'
 import Dashboard from './pages/Dashboard.tsx'
 import Onboarding from './pages/Onboarding.tsx'
+import Channels from './pages/Channels.tsx'
 import Chat from './pages/Chat.tsx'
 import Settings from './pages/Settings.tsx'
 import KnowledgeBase from './pages/KnowledgeBase.tsx'
@@ -25,6 +26,7 @@ export default function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="onboarding" element={<Onboarding />} />
+          <Route path="channels" element={<Channels />} />
           <Route path="dashboard/knowledge" element={<Navigate to="/knowledge" replace />} />
           <Route path="knowledge" element={<KnowledgeBase />} />
           <Route path="skills" element={<SkillStore />} />

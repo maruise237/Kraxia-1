@@ -511,6 +511,32 @@ export async function updatePreferences(input: PreferencesInput): Promise<AuthUs
   })
 }
 
+export interface ChannelConnectionInfo {
+  channel: string
+  display_name?: string | null
+  status: string
+  connected_at?: string | null
+  has_credentials: boolean
+  last_error?: string | null
+}
+
+export async function listChannels(): Promise<{ channels: ChannelConnectionInfo[] }> {
+  return fetchJSON<{ channels: ChannelConnectionInfo[] }>('/api/channels')
+}
+
+export async function connectChannel(channel: string, input: { display_name?: string; credentials: Record<string, string> }): Promise<{ ok: boolean; channel: string; status: string }> {
+  return fetchJSON<{ ok: boolean; channel: string; status: string }>(`/api/channels/${encodeURIComponent(channel)}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function disconnectChannel(channel: string): Promise<{ ok: boolean; channel: string; status: string }> {
+  return fetchJSON<{ ok: boolean; channel: string; status: string }>(`/api/channels/${encodeURIComponent(channel)}`, {
+    method: 'DELETE',
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Cron Jobs
 // ---------------------------------------------------------------------------

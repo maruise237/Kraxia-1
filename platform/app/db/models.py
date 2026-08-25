@@ -11,6 +11,7 @@ from sqlalchemy import (
     JSON,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -141,6 +142,24 @@ class UserPortBinding(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+
+class ChannelConnection(Base):
+    """Encrypted user channel configuration; plaintext secrets never leave the API."""
+
+    __tablename__ = "channel_connections"
+    __table_args__ = (UniqueConstraint("user_id", "channel", name="uq_channel_user_channel"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    channel: Mapped[str] = mapped_column(String(24), nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    encrypted_config: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="configured")
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    connected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
 class CreditLedger(Base):
