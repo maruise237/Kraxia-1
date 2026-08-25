@@ -24,6 +24,7 @@ services:
         APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     image: hermes-base:latest
+    pull_policy: build
     entrypoint: ["true"]
     restart: "no"
 
@@ -31,14 +32,16 @@ services:
     build:
       context: ./hermes-agent
       dockerfile: Dockerfile.bridge
+      additional_contexts:
+        hermes-base: service:hermes-base-image
       args:
-        BASE_TAG: latest
         APT_DEBIAN_MIRROR: ${APT_DEBIAN_MIRROR:-}
         APT_SECURITY_MIRROR: ${APT_SECURITY_MIRROR:-}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
         HERMES_INSTALL_BROWSER: ${HERMES_INSTALL_BROWSER:-false}
         HERMES_INSTALL_WHATSAPP_BRIDGE: ${HERMES_INSTALL_WHATSAPP_BRIDGE:-false}
     image: nanobot-hermes-agent:latest
+    pull_policy: build
     entrypoint: ["true"]
     restart: "no"
     depends_on:

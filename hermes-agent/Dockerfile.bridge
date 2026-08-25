@@ -1,5 +1,4 @@
-ARG BASE_TAG=latest
-FROM hermes-base:${BASE_TAG}
+FROM hermes-base
 
 ENV PYTHONUNBUFFERED=1
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/.playwright
