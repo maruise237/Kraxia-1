@@ -15,7 +15,8 @@ from app.auth.dependencies import require_admin
 from app.auth.service import get_user_by_email, get_user_by_username, hash_password
 from app.container.manager import destroy_container, pause_container, resume_container
 from app.db.engine import get_db
-from app.db.models import AuditLog, Container, ModelProviderConfig, UsageRecord, User
+from app.db.models import AuditLog, Container, ModelProviderConfig, UsageRecord, User, UserQuota
+from app.quota import ensure_user_entitlements
 from app.model_config import get_model_config_payload, set_default_model
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -36,6 +37,9 @@ class UserSummary(BaseModel):
     shared_agent_id: str | None = None
     shared_agent_status: str | None = None
     tokens_used_today: int = 0
+    plan_code: str = "launch"
+    storage_bytes_used: int = 0
+    llm_credit_cents_used: int = 0
 
 
 class PaginatedUsers(BaseModel):
@@ -165,9 +169,13 @@ async def list_users(
             Container.status.label("container_status"),
             Container.docker_id.label("container_docker_id"),
             Container.created_at.label("container_created_at"),
+            UserQuota.plan_code,
+            func.coalesce(UserQuota.storage_bytes_used, 0).label("storage_bytes_used"),
+            func.coalesce(UserQuota.llm_credit_cents_used, 0).label("llm_credit_cents_used"),
             func.coalesce(usage_sub.c.tokens_today, 0).label("tokens_used_today"),
         )
         .outerjoin(Container, Container.user_id == User.id)
+        .outerjoin(UserQuota, UserQuota.user_id == User.id)
         .outerjoin(usage_sub, usage_sub.c.user_id == User.id)
     )
 
@@ -205,6 +213,9 @@ async def list_users(
             shared_agent_id=None,
             shared_agent_status=None,
             tokens_used_today=row.tokens_used_today,
+            plan_code=row.plan_code or "launch",
+            storage_bytes_used=row.storage_bytes_used,
+            llm_credit_cents_used=row.llm_credit_cents_used,
         )
         for row in rows
     ]
@@ -247,6 +258,7 @@ async def create_user_handler(
         runtime_mode=req.runtime_mode,
     )
     db.add(user)
+    await ensure_user_entitlements(db, user.id, plan_code="launch")
     await write_audit_log(
         db,
         action="user_create",
