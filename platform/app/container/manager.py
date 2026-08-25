@@ -33,17 +33,21 @@ def get_docker_container(container_id_or_name: str) -> docker.models.containers.
     return _docker().containers.get(container_id_or_name)
 
 
-def _ensure_network() -> None:
-    """Create the internal Docker network if it doesn't exist."""
+def _ensure_named_network(name: str, *, internal: bool) -> None:
+    """Create a named runtime network with an explicit isolation policy."""
     client = _docker()
     try:
-        client.networks.get(settings.container_network)
+        client.networks.get(name)
     except DockerNotFound:
-        client.networks.create(
-            settings.container_network,
-            driver="bridge",
-            internal=False,  # allow internet access for tool downloads
-        )
+        client.networks.create(name, driver="bridge", internal=internal)
+
+
+def _ensure_networks() -> None:
+    """Ensure private control and outbound-only runtime networks exist."""
+    _ensure_named_network(settings.container_network, internal=True)
+    # Long-polling channels and tool downloads need outbound connectivity, but
+    # the network has no published ports and is never attached to the frontend.
+    _ensure_named_network(settings.container_egress_network, internal=False)
 
 
 def _published_binding(container: docker.models.containers.Container, container_port: str) -> tuple[str, str]:
@@ -499,8 +503,13 @@ def _write_hermes_runtime_files(container: docker.models.containers.Container) -
         platform_config["model"].pop("base_url", None)
 
     config_content = yaml.safe_dump(platform_config, allow_unicode=True, sort_keys=False).encode("utf-8")
-    env_content = _build_hermes_env_file(
-        _read_existing_hermes_env_channel_vars(container)
+    preserved_channel_vars = _read_existing_hermes_env_channel_vars(container)
+    # Keep the no-argument path compatible with lightweight adapters and tests
+    # while still preserving channel variables when they exist.
+    env_content = (
+        _build_hermes_env_file(preserved_channel_vars)
+        if preserved_channel_vars
+        else _build_hermes_env_file()
     ).encode("utf-8")
     tar_buffer = io.BytesIO()
     with tarfile.open(fileobj=tar_buffer, mode="w") as tar:
@@ -705,7 +714,7 @@ async def create_container(db: AsyncSession, user_id: str) -> Container | None:
     record = await get_container(db, user_id)
 
     # Now safe to create Docker resources — we hold the DB slot.
-    _ensure_network()
+    _ensure_networks()
     client = _docker()
 
     data_vol = _data_volume_name(short_id)
@@ -732,6 +741,8 @@ async def create_container(db: AsyncSession, user_id: str) -> Container | None:
         "detach": True,
         "environment": container_env,
         "mounts": _build_runtime_mounts(data_vol, short_id),
+        # User runtimes never receive published host ports. They reach the
+        # control plane through the private Docker network only.
         "network": settings.container_network,
         "mem_limit": settings.container_memory_limit,
         "shm_size": settings.container_shm_size,
@@ -740,48 +751,27 @@ async def create_container(db: AsyncSession, user_id: str) -> Container | None:
         "restart_policy": {"Name": "unless-stopped"},
     }
 
-    if settings.user_container_publish_ports:
-        binding = await get_user_port_binding(db, user_id)
-        preferred_browser_port = binding.host_port_browser if binding is not None else None
-        preferred_service_port = binding.host_port_service if binding is not None else None
-
-        preferred_ports = _runtime_preferred_ports(preferred_browser_port, preferred_service_port)
-        preferred_usable = preferred_ports is not None and all(
-            not _is_host_port_in_use(client, host_port)
-            for _container_port, (_host_ip, host_port) in preferred_ports.items()
-            if host_port is not None
-        )
-
-        run_kwargs["ports"] = preferred_ports if preferred_usable else _runtime_published_ports()
-
     try:
         docker_container = client.containers.run(**run_kwargs)
-    except DockerAPIError as exc:
-        # Preferred ports can race with other creators; fallback to random publish.
-        if settings.user_container_publish_ports and "port is already allocated" in str(exc).lower():
-            run_kwargs["ports"] = _runtime_published_ports()
-            docker_container = client.containers.run(**run_kwargs)
-        else:
-            await db.rollback()
-            raise
+        # Attach the runtime to a separate bridge for outbound polling and
+        # downloads. This network has no published ports and no frontend route.
+        client.networks.get(settings.container_egress_network).connect(docker_container)
     except Exception:
-        # Docker creation failed — remove the placeholder DB record
+        # Docker creation or network attachment failed — remove the placeholder
+        # DB record and any partially created container.
+        try:
+            if "docker_container" in locals():
+                docker_container.remove(force=True)
+        except Exception:
+            pass
         await db.rollback()
         raise
 
-    # Read container IP on the internal network
+    # Read the container IP on the private control network. No host binding is
+    # returned or persisted because Kraxia does not expose runtime ports.
     docker_container.reload()
-    browser_binding, service_binding = _published_port_bindings(docker_container)
     if runtime_backend == "openclaw":
         _write_openclaw_model_config(docker_container)
-        expose_markdown = _build_expose_port_skill_markdown(
-            user_id=user_id,
-            container_name=container_name,
-            browser_binding=browser_binding,
-            service_binding=service_binding,
-            public_base_url=settings.public_base_url,
-        )
-        _write_expose_port_skill(docker_container, expose_markdown)
     else:
         runtime_metadata = _build_runtime_metadata_markdown(
             user_id=user_id,
@@ -797,13 +787,6 @@ async def create_container(db: AsyncSession, user_id: str) -> Container | None:
     record.docker_id = docker_container.id
     record.status = "running"
     record.internal_host = internal_ip
-    await upsert_user_port_binding(
-        db=db,
-        user_id=user_id,
-        host_bind_ip=browser_binding[0] or service_binding[0] or settings.user_container_bind_ip,
-        host_port_browser=int(browser_binding[1]) if browser_binding[1] else None,
-        host_port_service=int(service_binding[1]) if service_binding[1] else None,
-    )
     await db.commit()
     await db.refresh(record)
     return record

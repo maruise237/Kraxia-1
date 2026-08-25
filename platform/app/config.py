@@ -63,7 +63,12 @@ class Settings(BaseSettings):
     dedicated_hermes_user_site_path: str = "/opt/data/.local/lib/python3.13/site-packages"
     dedicated_runtime_container_name_prefix: str = "hermes-user"
     dedicated_runtime_data_volume_prefix: str = "hermes-data"
-    container_network: str = "openclaw-internal"
+    # Private control network: user runtimes can reach the gateway, but it is
+    # not routable to the outside world.
+    container_network: str = "kraxia-runtime-control"
+    # Egress-only bridge used by runtimes for long-polling channel connections.
+    # It has no published ports and is not shared with the public frontend.
+    container_egress_network: str = "kraxia-runtime-egress"
 
     # Shared runtime endpoints/tokens，共享 runtime 容器时的参数
     shared_openclaw_enabled: bool = True
@@ -72,7 +77,8 @@ class Settings(BaseSettings):
     shared_hermes_api_key: str = "dev-hermes-bridge-key"
     shared_openclaw_timeout_seconds: int = 120
     shared_openclaw_system_token: str = ""
-    user_container_publish_ports: bool = True
+    # Deprecated compatibility flag. Kraxia never publishes user-container ports.
+    user_container_publish_ports: bool = False
     user_container_bind_ip: str = "0.0.0.0"
     container_tz: str = "Asia/Shanghai"
     # 🟢 提升资源限制（适合浏览器/agent）

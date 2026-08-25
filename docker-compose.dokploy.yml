@@ -59,7 +59,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
-      - openclaw-internal
+      - kraxia-runtime-control
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nanobot -d nanobot_platform"]
       interval: 5s
@@ -115,7 +115,8 @@ services:
       PLATFORM_MINIMAX_M27_USE_HIGHSPEED: ${MINIMAX_M27_USE_HIGHSPEED:-true}
       PLATFORM_DEDICATED_HERMES_URL: ${PLATFORM_DEDICATED_HERMES_URL:-}
       PLATFORM_DEV_OPENCLAW_URL: ${PLATFORM_DEV_OPENCLAW_URL:-}
-      PLATFORM_CONTAINER_NETWORK: openclaw-internal
+      PLATFORM_CONTAINER_NETWORK: kraxia-runtime-control
+      PLATFORM_CONTAINER_EGRESS_NETWORK: kraxia-runtime-egress
 
       # Mode partagé désactivé : aucun service shared-openclaw dans ce stack.
       PLATFORM_SHARED_OPENCLAW_ENABLED: "false"
@@ -130,7 +131,7 @@ services:
       - ./.hermes/benchmarks:/app/.hermes/benchmarks:ro
       - ./.hermes/training_traces:/app/.hermes/training_traces
     networks:
-      - openclaw-internal
+      - kraxia-runtime-control
       - openclaw-external
     depends_on:
       postgres:
@@ -180,8 +181,12 @@ services:
     restart: unless-stopped
 
 networks:
-  openclaw-internal:
-    name: openclaw-internal
+  kraxia-runtime-control:
+    name: kraxia-runtime-control
+    driver: bridge
+    internal: true
+  kraxia-runtime-egress:
+    name: kraxia-runtime-egress
     driver: bridge
     internal: false
   openclaw-external:
