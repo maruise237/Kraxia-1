@@ -290,7 +290,7 @@ function CreateCronPanel({
                   className="h-10 rounded-xl border border-light-border bg-light-card-hover px-3 text-sm text-light-text placeholder:text-light-text-secondary focus:border-accent-blue"
                 />
                 <span className="mt-1 block text-xs text-light-text-secondary">
-                  {everyPreview}. Hermes planifie actuellement à la minute près ; les intervalles inférieurs à 1 minute ne sont pas enregistrés.
+                  {everyPreview}. Les habitudes sont vérifiées automatiquement ; choisis un intervalle d’au moins une minute.
                 </span>
               </label>
             )}
