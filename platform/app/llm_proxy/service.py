@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import time
+from math import ceil
 from datetime import datetime
 from functools import lru_cache
 from typing import Any
@@ -29,8 +30,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit import write_audit_log
 from app.auth.service import decode_token
 from app.config import settings
-from app.db.models import Container, ModelProviderConfig, UsageRecord, User
+from app.db.models import CreditLedger, Container, ModelProviderConfig, UsageRecord, User
 from app.model_config import resolve_model_provider
+from app.quota import ensure_user_entitlements, get_user_entitlements, reset_period_if_needed
 
 logger = logging.getLogger("platform.llm_proxy")
 
@@ -268,7 +270,29 @@ _TIER_LIMITS = {
 
 
 async def _check_quota(db: AsyncSession, user: User) -> None:
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    """Enforce the user's monthly LLM credit, with a legacy token fallback."""
+    now = datetime.utcnow()
+    plan, _subscription, quota = await get_user_entitlements(db, user.id)
+    if quota is None:
+        _subscription, quota = await ensure_user_entitlements(db, user.id)
+        await db.flush()
+        plan, _subscription, quota = await get_user_entitlements(db, user.id)
+
+    if plan is not None and quota is not None:
+        reset_period_if_needed(quota, now)
+        # Reuse the loaded counter during the same request; this avoids a
+        # second entitlement query when the response usage is recorded.
+        setattr(user, "_kraxia_quota", quota)
+        if quota.llm_credit_cents_used >= plan.llm_credit_cents:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Le crédit LLM de ton offre est épuisé. Il sera renouvelé au prochain cycle.",
+            )
+        return
+
+    # Keep the existing daily token guard for installations that have not yet
+    # completed the entitlement backfill.
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     result = await db.execute(
         select(func.coalesce(func.sum(UsageRecord.total_tokens), 0)).where(
             UsageRecord.user_id == user.id,
@@ -277,12 +301,29 @@ async def _check_quota(db: AsyncSession, user: User) -> None:
     )
     used_today: int = result.scalar_one()
     limit = _TIER_LIMITS.get(user.quota_tier, _TIER_LIMITS["free"])
-
     if used_today >= limit:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Daily token quota exceeded ({used_today:,}/{limit:,}). Resets at midnight UTC.",
         )
+
+
+def _estimate_cost_cents(model: str, input_tokens: int, output_tokens: int) -> int:
+    """Estimate provider cost in US cents without ever exposing provider keys."""
+    total_tokens = max(0, input_tokens) + max(0, output_tokens)
+    if total_tokens <= 0:
+        return 0
+    try:
+        input_cost, output_cost = litellm.cost_per_token(
+            model=model,
+            prompt_tokens=input_tokens,
+            completion_tokens=output_tokens,
+        )
+        return max(1, int(ceil((float(input_cost) + float(output_cost)) * 100)))
+    except Exception:
+        # Custom providers often have no LiteLLM price table. A conservative
+        # minimum keeps the credit ledger enforceable instead of silently free.
+        return max(1, int(ceil(total_tokens / 1000)))
 
 
 # ---------------------------------------------------------------------------
@@ -545,7 +586,12 @@ async def _record_usage(
     total = input_tokens + output_tokens
     if user is None or total <= 0:
         return
-    db.add(UsageRecord(
+
+    cost_cents = _estimate_cost_cents(upstream_model or model, input_tokens, output_tokens)
+    quota = getattr(user, "_kraxia_quota", None)
+    if quota is not None:
+        reset_period_if_needed(quota, datetime.utcnow())
+    usage = UsageRecord(
         user_id=user.id,
         model=model,
         provider_id=provider_id,
@@ -553,7 +599,21 @@ async def _record_usage(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=total,
-    ))
+        estimated_cost_cents=cost_cents,
+    )
+    db.add(usage)
+    await db.flush()
+    if quota is not None:
+        quota.llm_credit_cents_used += cost_cents
+        quota.llm_input_tokens += input_tokens
+        quota.llm_output_tokens += output_tokens
+        db.add(CreditLedger(
+            user_id=user.id,
+            usage_record_id=usage.id,
+            amount_cents=cost_cents,
+            reason="llm_usage",
+            idempotency_key=f"{usage.id}:llm_usage",
+        ))
     await write_audit_log(
         db,
         action="llm_call",
@@ -566,6 +626,7 @@ async def _record_usage(
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "total_tokens": total,
+            "estimated_cost_cents": cost_cents,
         },
     )
     await db.commit()

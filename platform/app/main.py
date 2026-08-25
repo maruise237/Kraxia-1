@@ -7,6 +7,7 @@ from urllib.parse import urlparse, urlunparse
 
 import asyncpg
 from fastapi import FastAPI
+from sqlalchemy import select
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api_compat import openclaw_compat
@@ -97,6 +98,28 @@ async def _ensure_model_config() -> None:
         await seed_model_config_from_env(db)
 
 
+async def _ensure_launch_plan() -> None:
+    from app.db.engine import async_session
+    from app.quota import ensure_launch_plan
+
+    async with async_session() as db:
+        await ensure_launch_plan(db)
+        await db.commit()
+
+
+async def _ensure_user_entitlements() -> None:
+    """Backfill the launch offer for accounts created before quota models."""
+    from app.db.engine import async_session
+    from app.db.models import User
+    from app.quota import ensure_user_entitlements
+
+    async with async_session() as db:
+        result = await db.execute(select(User.id))
+        for (user_id,) in result.all():
+            await ensure_user_entitlements(db, user_id)
+        await db.commit()
+
+
 async def _migrate_add_missing_columns() -> None:
     """Detect columns defined in ORM models but missing from the DB, and ADD them.
 
@@ -157,13 +180,15 @@ async def lifespan(app: FastAPI):
     await _migrate_add_missing_columns()
     await _ensure_admin_user()
     await _ensure_model_config()
+    await _ensure_launch_plan()
+    await _ensure_user_entitlements()
     yield
     await close_runtime_backends()
     await engine.dispose()
 
 
 app = FastAPI(
-    title="OpenClaw Platform",
+    title="Kraxia Platform",
     version="0.1.0",
     lifespan=lifespan,
 )

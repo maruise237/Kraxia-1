@@ -136,6 +136,8 @@ async def create_or_update_sso_user(
         runtime_mode=runtime_mode_for_new_user,
     )
     db.add(user)
+    from app.quota import ensure_user_entitlements
+    await ensure_user_entitlements(db, user.id)
     await db.commit()
     await db.refresh(user)
     return user

@@ -22,6 +22,7 @@ from app.audit import write_audit_log
 from app.auth.dependencies import get_current_user
 from app.db.engine import get_db
 from app.db.models import User
+from app.quota import ensure_user_entitlements, get_user_entitlements, quota_snapshot
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -63,6 +64,9 @@ class UserResponse(BaseModel):
     quota_tier: str
     runtime_mode: str
     is_active: bool
+    plan: dict[str, object] | None = None
+    subscription: dict[str, object] | None = None
+    usage: dict[str, object] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +81,8 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="邮箱已被注册")
 
     user = await create_user(db, req.username, req.email, req.password)
+    await ensure_user_entitlements(db, user.id)
+    await db.commit()
     return TokenResponse(
         access_token=create_access_token(user.id, user.role),
         refresh_token=create_refresh_token(user.id),
@@ -140,7 +146,13 @@ async def refresh(req: RefreshRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(user: User = Depends(get_current_user)):
+async def get_me(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    plan, subscription, quota = await get_user_entitlements(db, user.id)
+    if subscription is None or quota is None:
+        await ensure_user_entitlements(db, user.id)
+        await db.commit()
+        plan, subscription, quota = await get_user_entitlements(db, user.id)
+    snapshot = quota_snapshot(plan, subscription, quota)
     return UserResponse(
         id=user.id,
         username=user.username,
@@ -149,6 +161,9 @@ async def get_me(user: User = Depends(get_current_user)):
         quota_tier=user.quota_tier,
         runtime_mode=user.runtime_mode,
         is_active=user.is_active,
+        plan=snapshot["plan"],
+        subscription=snapshot["subscription"],
+        usage=snapshot["usage"],
     )
 
 
