@@ -1566,7 +1566,7 @@ export default function Chat() {
   const selectedAgentLabel =
     !currentAgentId || currentAgentId === 'main'
       ? 'Assistant principal'
-      : selectedAgent?.identity?.name || selectedAgent?.name || currentAgentId || 'Agent inconnu'
+      : selectedAgent?.identity?.name || selectedAgent?.name || currentAgentId || 'Aide introuvable'
   const conversationTitle = isDraftStart
     ? 'Nouvelle conversation'
     : currentSessionTitle?.trim() ||
@@ -1634,17 +1634,17 @@ export default function Chat() {
           value={agentSearch}
           onValueChange={setAgentSearch}
           className="min-w-0 flex-1 bg-transparent text-sm text-light-text outline-none placeholder:text-light-text-secondary"
-          placeholder="Rechercher un agent"
+          placeholder="Rechercher une aide"
           autoFocus
-          clearLabel="Effacer la recherche d'agent"
+          clearLabel="Effacer la recherche"
         />
       </div>
       <div className="overflow-y-auto pr-1" style={{ maxHeight: agentPickerListMaxHeight }}>
         {filteredAgents.length === 0 ? (
-          <div className="px-2 py-4 text-center text-xs text-light-text-secondary">Aucun agent correspondant</div>
+          <div className="px-2 py-4 text-center text-xs text-light-text-secondary">Aucune aide correspondante</div>
         ) : filteredAgents.map(agent => {
           const label = agent.identity?.name || agent.name || agent.id
-          const description = agentDescriptions[agent.id] || 'Assistant pour tâches dédiées'
+          const description = agentDescriptions[agent.id] || 'Aide pour un besoin précis'
           const selected = Boolean(draftAgentId) && agent.id === draftAgentId
           return (
             <button
@@ -1680,7 +1680,7 @@ export default function Chat() {
           className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-light-text-secondary transition-colors hover:bg-light-card-hover hover:text-light-text"
         >
           <Plus size={16} />
-          <span>Créer un agent dédié</span>
+          <span>Ajouter une aide personnalisée</span>
         </button>
       </div>
     </div>
@@ -1700,7 +1700,7 @@ export default function Chat() {
             ? 'cursor-pointer text-light-text-secondary hover:border-accent-blue/30 hover:text-light-text'
             : 'cursor-not-allowed text-light-text-secondary/60'
         ) + ' ' + (compact && !draftAgentId ? 'text-accent-blue' : '')}
-        title={canChangeAgent ? 'Choisir un agent' : 'La conversation en cours est verrouillée sur cet agent'}
+        title={canChangeAgent ? 'Choisir une aide' : 'Cette discussion utilise déjà cette aide'}
       >
         <Bot size={14} />
         <span className="max-w-[180px] truncate">{selectedAgentLabel}</span>
@@ -1846,7 +1846,7 @@ export default function Chat() {
       <div className={(compact ? 'mt-2' : 'mb-3') + ' space-y-1.5 rounded-lg border border-light-border bg-light-card-hover/55 px-3 py-2'}>
         <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-normal text-light-text-secondary">
           <Bot size={12} />
-          L'agent s'exécute
+          Ton assistant travaille
         </div>
         {renderActivityRows(events)}
       </div>
@@ -1907,7 +1907,7 @@ export default function Chat() {
                   className="flex items-center gap-1.5 text-xs text-light-text-secondary transition-colors hover:text-light-text"
                 >
                   <Wrench size={12} />
-                  <span>{archive.events.length} commande{archive.events.length > 1 ? 's' : ''} exécutée{archive.events.length > 1 ? 's' : ''}</span>
+                  <span>{archive.events.length} action{archive.events.length > 1 ? 's' : ''} réalisée{archive.events.length > 1 ? 's' : ''}</span>
                   <ChevronRight
                     size={13}
                     className={'transition-transform ' + (archive.toolEventsExpanded ? 'rotate-90' : '')}
@@ -1937,12 +1937,12 @@ export default function Chat() {
           {filteredSlashCommands.length === 0 ? (
             <div className="px-4 py-3 text-sm text-light-text-secondary">
               {slashCommandsLoading
-                ? 'Chargement des commandes Hermes...'
+                ? 'Préparation de l’aide…'
                 : slashCommandsError
-                  ? 'Échec du chargement des commandes : ' + slashCommandsError
+                  ? 'Impossible de préparer cette aide : ' + slashCommandsError
                   : slashCommands.length === 0
-                    ? 'Aucune commande Hermes disponible'
-                    : 'Aucune commande correspondante'}
+                    ? 'Aucune action disponible pour le moment'
+                    : 'Aucune action correspondante'}
             </div>
           ) : (
             Object.entries(groupedSlashCommands).map(([category, commands]) => {
@@ -2016,7 +2016,7 @@ export default function Chat() {
           }}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder={hero ? 'Envoyez un message à Hermes, tapez / pour les commandes' : 'Continuez la conversation, tapez / pour les commandes'}
+          placeholder={hero ? 'Écris à ton assistant ce dont tu as besoin' : 'Continue la discussion avec ton assistant'}
           rows={hero ? 3 : 2}
           className="min-h-[72px] w-full resize-none bg-transparent px-2 py-2 text-[15px] text-light-text outline-none placeholder:text-slate-400"
           disabled={isCurrentSending}

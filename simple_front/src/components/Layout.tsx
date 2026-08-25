@@ -62,12 +62,12 @@ type AgentMenuState = {
 } | null
 
 const primaryNav = [
-  { to: '/chat', label: 'Nouvelle conversation', icon: Pencil },
-  { to: '/dashboard', label: 'Espace de travail', icon: LayoutDashboard },
-  { to: '/knowledge', label: 'Base de connaissances', icon: BookOpen },
-  { to: '/skills', label: 'Compétences', icon: Sparkles },
-  { to: '/cron', label: 'Tâches planifiées', icon: Clock },
-  { to: '/settings', label: 'Paramètres', icon: SettingsIcon },
+  { to: '/chat', label: 'Discuter avec mon assistant', icon: Pencil },
+  { to: '/dashboard', label: 'Accueil', icon: LayoutDashboard },
+  { to: '/knowledge', label: 'Mes documents', icon: BookOpen },
+  { to: '/skills', label: 'Ce que mon assistant sait faire', icon: Sparkles },
+  { to: '/cron', label: 'Mes habitudes', icon: Clock },
+  { to: '/settings', label: 'Préférences', icon: SettingsIcon },
 ]
 
 const unreadSessionsStorageKey = 'openclaw_unread_sessions'
@@ -548,7 +548,7 @@ export default function Layout() {
               onClick={() => setAgentsFolderOpen(value => !value)}
               className="flex cursor-pointer items-center gap-1 rounded-md text-xs transition-colors hover:text-light-text"
             >
-              <span>Conversations d'agents</span>
+              <span>Mes conversations</span>
               <ChevronRight
                 size={13}
                 className={`sidebar-chevron ${agentsFolderOpen ? 'is-open' : ''}`}
@@ -589,7 +589,7 @@ export default function Layout() {
                       <span className="truncate">{group.label}</span>
                     </button>
                     <IconButton
-                      label={`Nouvelle conversation avec ${group.label}`}
+                      label={`Nouvelle discussion avec ${group.label}`}
                       onClick={() => startAgentSession(group.id)}
                       size="sm"
                       surface="plain"
@@ -693,7 +693,7 @@ export default function Layout() {
               </div>
               <div className={`sidebar-collapse ${agentsFolderOpen ? '' : 'is-open'}`}>
                 <div className="px-2 py-3 text-xs text-slate-500">
-                  {sessionsLoading ? 'Chargement des conversations d\'agents' : `${agentGroups.length} agent${agentGroups.length > 1 ? 's' : ''} replié${agentGroups.length > 1 ? 's' : ''}`}
+                  {sessionsLoading ? 'Chargement de tes conversations' : `${agentGroups.length} aide${agentGroups.length > 1 ? 's' : ''} personnalisée${agentGroups.length > 1 ? 's' : ''}`}
                 </div>
               </div>
 
@@ -703,7 +703,7 @@ export default function Layout() {
                   onClick={() => setOrdinaryFolderOpen(value => !value)}
                   className="flex cursor-pointer items-center gap-1 rounded-md text-xs transition-colors hover:text-light-text"
                 >
-                  <span>Conversation principale</span>
+                  <span>Mon assistant</span>
                   <ChevronRight
                     size={13}
                     className={`sidebar-chevron ${ordinaryFolderOpen ? 'is-open' : ''}`}
@@ -804,7 +804,7 @@ export default function Layout() {
         <div className="mt-3 flex items-center justify-between rounded-xl px-2 py-2 text-slate-700">
           <div className="min-w-0 text-xs text-slate-500">
             <div className="truncate text-sm text-slate-700">{user?.username || 'Utilisateur actuel'}</div>
-            <div className="truncate">{user?.email || 'OpenClaw Lite'}</div>
+            <div className="truncate">{user?.email || 'Kraxia'}</div>
           </div>
           <div className="flex items-center gap-2">
             <UserAvatar user={user} />
@@ -892,13 +892,13 @@ export default function Layout() {
           </button>
           <button
             onClick={() => {
-              void copyText(agentMenu.agentId)
+              void copyText(getAgentDisplayName(agents.find(item => item.id === agentMenu.agentId), agentMenu.agentId))
               setAgentMenu(null)
             }}
             className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-light-text transition-colors hover:bg-light-card-hover"
           >
             <Copy size={15} />
-            Copier l'ID de l'agent
+            Copier le nom de cette aide
           </button>
         </div>
       )}

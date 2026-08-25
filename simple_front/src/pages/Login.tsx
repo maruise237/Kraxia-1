@@ -69,13 +69,13 @@ export default function Login() {
               <Bot size={18} />
             </div>
             <div>
-              <div className="text-sm font-semibold tracking-normal text-light-text">OpenClaw Lite</div>
-              <div className="text-xs text-light-text-secondary">Espace d'agents</div>
+              <div className="text-sm font-semibold tracking-normal text-light-text">Kraxia</div>
+              <div className="text-xs text-light-text-secondary">Ton assistant personnel</div>
             </div>
           </div>
           <div className="hidden items-center gap-2 rounded-full border border-white/70 bg-white/60 px-3 py-1.5 text-xs text-light-text-secondary shadow-sm backdrop-blur sm:flex">
             <Workflow size={14} />
-            Accès multi-agents
+            Disponible quand tu en as besoin
           </div>
         </header>
 
@@ -86,12 +86,12 @@ export default function Login() {
                 <Bot size={22} />
               </div>
               <h1 className="text-3xl font-medium tracking-normal text-light-text">
-                {mode === 'login' ? 'Bon retour' : 'Créer un compte OpenClaw'}
+                {mode === 'login' ? 'Bon retour' : 'Créer mon espace Kraxia'}
               </h1>
               <p className="mt-3 text-sm leading-6 text-light-text-secondary">
                 {mode === 'login'
-                  ? 'Connectez-vous pour retrouver vos sessions d\'agents et votre conversation par défaut.'
-                  : 'Créez un compte pour commencer à organiser vos workflows d\'agents.'}
+                  ? 'Retrouve tes échanges, tes documents et ton assistant personnel au même endroit.'
+                  : 'Crée ton espace pour commencer à avancer avec un assistant qui te connaît.'}
               </p>
             </div>
 
@@ -206,7 +206,7 @@ export default function Login() {
             </div>
 
             <p className="mt-5 text-center text-xs leading-5 text-light-text-secondary">
-              En vous connectant, vous accédez à l'expérience front-end OpenClaw ToC locale.
+              En te connectant, tu retrouves ton espace Kraxia personnel.
             </p>
           </section>
         </main>

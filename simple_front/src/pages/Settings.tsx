@@ -359,12 +359,12 @@ function AppearancePreview({ settings }: { settings: AppearanceSettings }) {
         <div className="border-r border-light-border bg-light-sidebar p-3">
           <div className="mb-3 flex items-center gap-2 text-light-text">
             <Bot size={15} className="text-accent-blue" />
-            <span className="font-medium">OpenClaw Lite</span>
+            <span className="font-medium">Kraxia</span>
           </div>
           <div className="space-y-1">
-            <div className="rounded-lg bg-light-card px-3 py-2 text-light-text shadow-sm">Espace de travail</div>
+            <div className="rounded-lg bg-light-card px-3 py-2 text-light-text shadow-sm">Accueil</div>
             <div className="rounded-lg px-3 py-2 text-light-text-secondary">Paramètres</div>
-            <div className="rounded-lg px-3 py-2 text-light-text-secondary">Conversations d'agents</div>
+            <div className="rounded-lg px-3 py-2 text-light-text-secondary">Mes conversations</div>
           </div>
         </div>
         <div className="bg-light-bg p-3">

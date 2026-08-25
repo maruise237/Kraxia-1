@@ -147,8 +147,8 @@ export default function AgentCreatePanel({
     }
   }
 
-  const title = mode === 'view' ? 'Voir l\'agent' : mode === 'edit' ? 'Modifier l\'agent' : 'Créer un agent dédié'
-  const subtitle = mode === 'view' ? 'Les agents intégrés au système sont en lecture seule' : 'Configurez un assistant réutilisable pour une tâche récurrente'
+  const title = mode === 'view' ? 'Voir cette aide' : mode === 'edit' ? 'Modifier cette aide' : 'Ajouter une aide personnalisée'
+  const subtitle = mode === 'view' ? 'Cette aide est déjà disponible dans ton espace' : 'Décris simplement ce que tu veux retrouver dans ton quotidien'
   const closeLabel = mode === 'view' ? 'Fermer le panneau de consultation' : mode === 'edit' ? 'Fermer le panneau d\'édition' : 'Fermer le panneau de création'
 
   return (
@@ -179,7 +179,7 @@ export default function AgentCreatePanel({
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
             <div>
               <label htmlFor="agent-display-name" className="mb-1.5 block text-xs font-medium text-light-text-secondary">
-                Nom d'affichage
+                Nom de cette aide
               </label>
               <div className="flex items-center gap-2 rounded-xl border border-light-border bg-light-card px-3 transition-colors focus-within:border-accent-blue/50">
                 <Sparkles size={16} className="shrink-0 text-accent-blue" />
@@ -188,7 +188,7 @@ export default function AgentCreatePanel({
                   value={displayName}
                   onValueChange={setDisplayName}
                   disabled={readOnly}
-                  placeholder="Exemple : assistant de relecture d'articles"
+                  placeholder="Exemple : m’aider à répondre à mes clients"
                   className="min-h-11 w-full bg-transparent text-sm text-light-text outline-none"
                   clearLabel="Effacer le nom d'affichage"
                 />
@@ -197,7 +197,7 @@ export default function AgentCreatePanel({
 
             <div>
               <div className="mb-1.5 text-xs font-medium text-light-text-secondary">
-                Icône
+                Son apparence
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-light-card">
@@ -209,7 +209,7 @@ export default function AgentCreatePanel({
                 </div>
                 {!readOnly && (
                   <IconButton
-                    label="Régénérer l'icône"
+                    label="Changer l’apparence"
                     onClick={refreshIcon}
                     disabled={generatingIcon}
                     tone="primary"
@@ -222,7 +222,7 @@ export default function AgentCreatePanel({
 
             <div>
               <label htmlFor="agent-description" className="mb-1.5 block text-xs font-medium text-light-text-secondary">
-                Description de la tâche
+                Comment doit-elle t’aider ?
               </label>
               <ClearableTextarea
                 id="agent-description"
@@ -230,7 +230,7 @@ export default function AgentCreatePanel({
                 onValueChange={setDescription}
                 rows={6}
                 disabled={readOnly}
-                placeholder="Décrivez les tâches que cet agent maîtrise, son style de réponse et les limites à respecter."
+                placeholder="Explique en quelques mots ce que cette aide doit faire pour toi, le ton à employer et ce qu’elle doit retenir."
                 className="w-full resize-none rounded-xl border border-light-border bg-light-card px-3 py-2 text-sm leading-6 text-light-text outline-none transition-colors placeholder:text-light-text-secondary focus:border-accent-blue/50"
                 clearLabel="Effacer la description"
               />
@@ -253,7 +253,7 @@ export default function AgentCreatePanel({
                 className="flex cursor-pointer items-center gap-2 rounded-xl bg-accent-blue px-4 py-2 text-sm font-medium text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                {mode === 'edit' ? 'Enregistrer l\'agent' : 'Créer l\'agent'}
+                {mode === 'edit' ? 'Enregistrer les changements' : 'Ajouter cette aide'}
               </button>
             )}
           </footer>
