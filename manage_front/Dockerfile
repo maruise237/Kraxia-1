@@ -17,4 +17,7 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 EXPOSE 3000
-CMD ["node", "server.js"]
+# Next standalone uses HOSTNAME when binding its HTTP server. Docker injects
+# the container hostname automatically, which can bind outside Traefik's
+# network. Force an all-interface bind for reliable reverse-proxy routing.
+CMD ["sh", "-c", "HOSTNAME=0.0.0.0 exec node server.js"]
