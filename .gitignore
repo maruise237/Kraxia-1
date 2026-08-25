@@ -65,6 +65,8 @@ cache
 
 # Local planning and agent scratch docs. Use `git add -f docs/<path>` for shared docs.
 docs/
+!docs/kraxia/
+!docs/kraxia/*.md
 openclaw/bridge-deploy-copy
 hermes-agent/deploy-copy
 platform/deploy_copy/*

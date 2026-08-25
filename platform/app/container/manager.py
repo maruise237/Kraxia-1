@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.models import Container, User, UserPortBinding
+from app.quota import get_user_entitlements
 
 _client: docker.DockerClient | None = None
 
@@ -535,9 +536,13 @@ def _write_hermes_runtime_files(container: docker.models.containers.Container) -
 def update_hermes_channel_env(
     container: docker.models.containers.Container,
     channel_env: dict[str, str],
+    *,
+    remove_keys: set[str] | None = None,
 ) -> None:
     """Merge channel variables into the private Hermes .env and restart safely."""
     existing = _read_existing_hermes_env_channel_vars(container)
+    for key in remove_keys or set():
+        existing.pop(key, None)
     merged = {**existing, **channel_env}
     env_content = _build_hermes_env_file(merged).encode("utf-8")
     tar_buffer = io.BytesIO()
@@ -550,6 +555,7 @@ def update_hermes_channel_env(
     tar_buffer.seek(0)
     if not container.put_archive("/opt/data", tar_buffer.read()):
         raise RuntimeError("failed to update Hermes channel configuration")
+    _repair_hermes_data_ownership(container)
     container.restart()
 
 
@@ -699,6 +705,14 @@ async def upsert_user_port_binding(
     await db.execute(stmt)
 
 
+async def _runtime_memory_limit(db: AsyncSession, user_id: str) -> int | str:
+    """Return the user's plan RAM limit, with a safe legacy fallback."""
+    plan, _, _ = await get_user_entitlements(db, user_id)
+    if plan and plan.ram_bytes > 0:
+        return int(plan.ram_bytes)
+    return settings.container_memory_limit
+
+
 async def create_container(db: AsyncSession, user_id: str) -> Container | None:
     """Create a Docker container for a user and record metadata in DB.
 
@@ -754,6 +768,7 @@ async def create_container(db: AsyncSession, user_id: str) -> Container | None:
     sso_token = user_row.sso_token if user_row else None
 
     container_env = _runtime_environment(container_token, sso_token)
+    memory_limit = await _runtime_memory_limit(db, user_id)
 
     run_kwargs = {
         "image": _runtime_image(),
@@ -765,7 +780,7 @@ async def create_container(db: AsyncSession, user_id: str) -> Container | None:
         # User runtimes never receive published host ports. They reach the
         # control plane through the private Docker network only.
         "network": settings.container_network,
-        "mem_limit": settings.container_memory_limit,
+        "mem_limit": memory_limit,
         "shm_size": settings.container_shm_size,
         "nano_cpus": int(settings.container_cpu_limit * 1e9),
         "pids_limit": settings.container_pids_limit,
@@ -801,6 +816,11 @@ async def create_container(db: AsyncSession, user_id: str) -> Container | None:
         )
         _write_runtime_metadata(docker_container, runtime_metadata)
         _write_hermes_runtime_files(docker_container)
+        # Channel credentials live in the Platform database as ciphertext. Reapply
+        # them after a fresh container is created so recreation does not disconnect
+        # a user's configured channel.
+        from app.routes.channels import restore_channel_connections
+        await restore_channel_connections(db, user_id, docker_container)
 
     network_settings = docker_container.attrs["NetworkSettings"]["Networks"]
     internal_ip = network_settings.get(settings.container_network, {}).get("IPAddress", "")

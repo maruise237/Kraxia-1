@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import logging
+
 from app.auth.dependencies import get_current_user
 from app.config import settings
 from app.container.manager import ensure_running, get_docker_container, update_hermes_channel_env
@@ -20,18 +22,40 @@ from app.db.engine import get_db
 from app.db.models import ChannelConnection, User
 
 router = APIRouter(prefix="/api/channels", tags=["channels"])
+logger = logging.getLogger(__name__)
 ALLOWED_CHANNELS = {"whatsapp", "telegram", "discord"}
 
 
-def _fernet() -> Fernet:
-    secret = (settings.channel_encryption_key or settings.jwt_secret).encode("utf-8")
-    key = base64.urlsafe_b64encode(hashlib.sha256(secret).digest())
+def _fernet_for_secret(secret: str) -> Fernet:
+    key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode("utf-8")).digest())
     return Fernet(key)
+
+
+def _fernets() -> list[Fernet]:
+    """Return the active key and legacy JWT-derived key during safe rotation."""
+    secrets = [settings.channel_encryption_key or settings.jwt_secret]
+    if settings.channel_encryption_key and settings.jwt_secret and settings.channel_encryption_key != settings.jwt_secret:
+        secrets.append(settings.jwt_secret)
+    return [_fernet_for_secret(secret) for secret in secrets if secret]
 
 
 def _encrypt_config(credentials: dict[str, str]) -> str:
     payload = json.dumps(credentials, ensure_ascii=False, sort_keys=True).encode("utf-8")
-    return _fernet().encrypt(payload).decode("ascii")
+    return _fernets()[0].encrypt(payload).decode("ascii")
+
+
+def _decrypt_config(encrypted_config: str) -> dict[str, str]:
+    last_error: Exception | None = None
+    for fernet in _fernets():
+        try:
+            payload = fernet.decrypt(encrypted_config.encode("ascii"))
+            value = json.loads(payload.decode("utf-8"))
+            if not isinstance(value, dict):
+                raise ValueError("configuration de canal invalide")
+            return {str(key): str(item) for key, item in value.items()}
+        except Exception as exc:
+            last_error = exc
+    raise ValueError("configuration de canal illisible") from last_error
 
 
 def _validate_channel(channel: str) -> str:
@@ -44,6 +68,40 @@ def _validate_channel(channel: str) -> str:
 class ChannelConnectionRequest(BaseModel):
     display_name: str | None = Field(default=None, max_length=128)
     credentials: dict[str, str] = Field(default_factory=dict)
+
+
+def _channel_env(channel: str, credentials: dict[str, str]) -> dict[str, str]:
+    env_map = {
+        "telegram": {"token": "TELEGRAM_BOT_TOKEN", "allowed_users": "TELEGRAM_ALLOWED_USERS"},
+        "discord": {"token": "DISCORD_BOT_TOKEN", "allowed_users": "DISCORD_ALLOWED_USERS"},
+        "whatsapp": {
+            "allowed_users": "WHATSAPP_ALLOWED_USERS",
+            "enabled": "WHATSAPP_ENABLED",
+            "mode": "WHATSAPP_MODE",
+        },
+    }[channel]
+    return {env_map[key]: value for key, value in credentials.items() if key in env_map}
+
+
+def _channel_env_keys(channel: str) -> set[str]:
+    return set(_channel_env(channel, {"token": "", "allowed_users": "", "enabled": "", "mode": ""}))
+
+
+async def restore_channel_connections(db: AsyncSession, user_id: str, docker_container) -> None:
+    """Reapply encrypted channel settings after a runtime is created or recreated."""
+    result = await db.execute(select(ChannelConnection).where(ChannelConnection.user_id == user_id))
+    merged: dict[str, str] = {}
+    for connection in result.scalars().all():
+        if not connection.encrypted_config:
+            continue
+        try:
+            merged.update(_channel_env(connection.channel, _decrypt_config(connection.encrypted_config)))
+        except ValueError:
+            logger.warning("Unable to restore channel configuration for user %s", user_id)
+            connection.status = "error"
+            connection.last_error = "Configuration de canal illisible après rotation de clé."
+    if merged:
+        update_hermes_channel_env(docker_container, merged)
 
 
 @router.get("")
@@ -81,18 +139,13 @@ async def connect_channel(
     if not credentials:
         raise HTTPException(status_code=400, detail="Ajoute les informations de connexion du canal.")
 
-    env_map = {
-        "telegram": {"token": "TELEGRAM_BOT_TOKEN", "allowed_users": "TELEGRAM_ALLOWED_USERS"},
-        "discord": {"token": "DISCORD_BOT_TOKEN", "allowed_users": "DISCORD_ALLOWED_USERS"},
-        "whatsapp": {"allowed_users": "WHATSAPP_ALLOWED_USERS"},
-    }[channel]
-    unknown_keys = set(credentials) - set(env_map)
+    allowed_keys = {"token", "allowed_users"} if channel != "whatsapp" else {"allowed_users", "enabled", "mode"}
+    unknown_keys = set(credentials) - allowed_keys
     if unknown_keys:
         raise HTTPException(status_code=400, detail="Informations de connexion non reconnues pour ce canal.")
     if channel == "whatsapp":
         credentials.setdefault("enabled", "true")
         credentials.setdefault("mode", "bot")
-        env_map.update({"enabled": "WHATSAPP_ENABLED", "mode": "WHATSAPP_MODE"})
 
     result = await db.execute(
         select(ChannelConnection).where(
@@ -119,10 +172,13 @@ async def connect_channel(
         runtime = await ensure_running(db, user.id)
         if settings.dedicated_runtime_backend != "hermes":
             raise RuntimeError("Le runtime Hermes est requis pour connecter ce canal.")
-        docker_container = get_docker_container(runtime.docker_id or runtime.container_name)
+        if not runtime.docker_id:
+            raise RuntimeError("Runtime Docker indisponible")
+        docker_container = get_docker_container(runtime.docker_id)
         update_hermes_channel_env(
             docker_container,
-            {env_map[key]: value for key, value in credentials.items() if key in env_map},
+            _channel_env(channel, credentials),
+            remove_keys=_channel_env_keys(channel),
         )
         connection.status = "pairing_required" if channel == "whatsapp" else "connected"
         connection.last_error = None
@@ -149,11 +205,25 @@ async def disconnect_channel(
     db: AsyncSession = Depends(get_db),
 ):
     channel = _validate_channel(channel)
+    result = await db.execute(
+        select(ChannelConnection).where(
+            ChannelConnection.user_id == user.id,
+            ChannelConnection.channel == channel,
+        )
+    )
+    connection = result.scalar_one_or_none()
     await db.execute(
         delete(ChannelConnection).where(
             ChannelConnection.user_id == user.id,
             ChannelConnection.channel == channel,
         )
     )
+    try:
+        runtime = await ensure_running(db, user.id)
+        if runtime.docker_id:
+            docker_container = get_docker_container(runtime.docker_id)
+            update_hermes_channel_env(docker_container, {}, remove_keys=_channel_env_keys(channel))
+    except Exception:
+        logger.warning("Unable to clear runtime channel variables for user %s", user.id)
     await db.commit()
-    return {"ok": True, "channel": channel, "status": "not_connected"}
+    return {"ok": True, "channel": channel, "status": "not_connected", "had_credentials": bool(connection and connection.encrypted_config)}

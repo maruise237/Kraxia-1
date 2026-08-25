@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 from fastapi import HTTPException
+from docker.errors import NotFound as DockerNotFound
 from starlette.websockets import WebSocketDisconnect
 
 if "docker" not in sys.modules:
@@ -2538,7 +2539,7 @@ async def test_proxy_file_request_serves_legacy_scripts_path_from_skill(monkeypa
         def get_archive(self, path):
             self.paths.append(path)
             if path == "/scripts/medical_search.py":
-                raise RuntimeError("not found")
+                raise DockerNotFound("not found")
             tar_buffer = io.BytesIO()
             with tarfile.open(fileobj=tar_buffer, mode="w") as tar:
                 content = b"print('medical search')\n"
